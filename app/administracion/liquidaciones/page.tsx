@@ -3,23 +3,29 @@ import { useState, useEffect } from 'react'
 import { supabase } from '@/lib/supabase'
 import { 
   Calculator, Search, Eye, CheckCircle2, 
-  Loader2, Calendar as CalendarIcon, DollarSign
+  Loader2, Calendar as CalendarIcon, DollarSign,
+  TrendingUp, Users, ArrowUpRight, Filter
 } from 'lucide-react'
 import Link from 'next/link'
+import { toast } from 'sonner'
 
 export default function LiquidacionesPage() {
   const [liquidaciones, setLiquidaciones] = useState<any[]>([])
   const [cargando, setCargando] = useState(true)
   const [busqueda, setBusqueda] = useState('')
+  const [mesSeleccionado, setMesSeleccionado] = useState(new Date().toISOString().substring(0, 7)) // YYYY-MM
 
   useEffect(() => {
-    fetchLiquidaciones()
-  }, [])
+    fetchData()
+  }, [mesSeleccionado])
 
-  async function fetchLiquidaciones() {
+  async function fetchData() {
     setCargando(true)
     try {
-      // 1. Traemos a los profesionales
+      const inicioMes = `${mesSeleccionado}-01T00:00:00`
+      const finMes = `${mesSeleccionado}-31T23:59:59`
+
+      // 1. Obtener todos los profesionales activos
       const { data: profs } = await supabase
         .from('profesionales')
         .select('id, nombre, apellido, user_id')
@@ -27,138 +33,197 @@ export default function LiquidacionesPage() {
 
       if (!profs) return
 
-      // 2. Traemos la producción de atenciones realizadas
+      // 2. Producción por Atenciones Realizadas (Evoluciones terminadas)
       const { data: atenciones } = await supabase
         .from('atenciones_realizadas')
         .select('monto_cobrado, profesional_id')
+        .gte('fecha', inicioMes)
+        .lte('fecha', finMes)
 
-      // 3. Traemos los abonos de la tabla presupuesto_items
-      const { data: itemsPresupuesto } = await supabase
-        .from('presupuesto_items')
+      // 3. Producción por Abonos Directos a ítems del presupuesto
+      // Usamos la relación con profesional_id que agregamos a presupuesto_items
+      const { data: abonosItems } = await supabase
+        .from('pagos')
         .select(`
-          abonado,
-          presupuestos!inner(especialista_id)
+          monto,
+          profesional_id,
+          presupuesto_items!inner(profesional_id)
         `)
-        .gt('abonado', 0)
+        .gte('fecha_pago', inicioMes)
+        .lte('fecha_pago', finMes)
 
-      // 4. Cruzamos los datos asegurando valores numéricos (0 si es undefined/null)
-      const dataReal = profs.map(p => {
-        const produccionAtenciones = atenciones
+      // 4. Mapeo y Cruce de datos
+      const informeReal = profs.map(p => {
+        // Sumar atenciones directas
+        const sumaAtenciones = atenciones
           ?.filter(a => a.profesional_id === p.user_id)
           .reduce((acc, curr) => acc + Number(curr.monto_cobrado || 0), 0) || 0
 
-        const produccionAbonos = itemsPresupuesto
-          ?.filter((item: any) => item.presupuestos?.especialista_id === p.user_id)
-          .reduce((acc, curr) => acc + Number(curr.abonado || 0), 0) || 0
+        // Sumar abonos donde él es el ejecutor del ítem
+        const sumaAbonos = abonosItems
+          ?.filter(pago => pago.profesional_id === p.user_id)
+          .reduce((acc, curr) => acc + Number(curr.monto || 0), 0) || 0
 
-        const totalPro = produccionAtenciones + produccionAbonos
+        const totalProduccion = sumaAtenciones + sumaAbonos
 
         return {
           id: p.id,
-          nombre: p.nombre || 'Sin nombre',
-          apellido: p.apellido || '',
-          fecha: new Date().toLocaleDateString('es-CL'),
-          realizado: totalPro,
-          detalle_abonos: produccionAbonos,
-          detalle_atenciones: produccionAtenciones,
-          a_pagar: totalPro * 0.4, // 40% de honorarios
+          user_id: p.user_id,
+          nombreCompleto: `${p.nombre} ${p.apellido}`,
+          atenciones: sumaAtenciones,
+          abonos: sumaAbonos,
+          total: totalProduccion,
+          honorarios: totalProduccion * 0.40, // 40% configurable
+          utilidad: totalProduccion * 0.60
         }
       })
 
-      setLiquidaciones(dataReal)
+      setLiquidaciones(informeReal)
     } catch (error) {
-      console.error("Error cargando liquidaciones:", error)
+      console.error("Error financiero:", error)
+      toast.error("Error al calcular liquidaciones")
     } finally {
       setCargando(false)
     }
   }
 
-  const totalRealizado = liquidaciones.reduce((acc, curr) => acc + (curr.realizado || 0), 0)
-  const totalHonorarios = liquidaciones.reduce((acc, curr) => acc + (curr.a_pagar || 0), 0)
-  const utilidadClinica = totalRealizado - totalHonorarios
+  const globalTotal = liquidaciones.reduce((acc, curr) => acc + curr.total, 0)
+  const globalHonorarios = liquidaciones.reduce((acc, curr) => acc + curr.honorarios, 0)
+  const globalUtilidad = globalTotal - globalHonorarios
 
   const filtradas = liquidaciones.filter(l => 
-    `${l.nombre} ${l.apellido}`.toLowerCase().includes(busqueda.toLowerCase())
+    l.nombreCompleto.toLowerCase().includes(busqueda.toLowerCase())
   )
 
   return (
-    <div className="min-h-screen bg-[#F8FAFC] p-8 pb-20">
-      <div className="max-w-7xl mx-auto space-y-8">
+    <div className="min-h-screen bg-[#F8FAFC] p-8 pb-24 font-sans">
+      <div className="max-w-7xl mx-auto space-y-10">
         
-        {/* HEADER */}
-        <div className="bg-white p-10 rounded-[3rem] shadow-sm border border-slate-100 flex flex-col md:flex-row justify-between items-center gap-6">
+        {/* TOP BAR / HEADER */}
+        <div className="flex flex-col lg:flex-row justify-between items-start lg:items-center gap-6">
           <div className="flex items-center gap-6">
-            <div className="bg-blue-600 p-5 rounded-[2rem] text-white shadow-xl shadow-blue-100">
-              <Calculator size={32} />
+            <div className="bg-slate-900 p-5 rounded-[2.2rem] text-white shadow-2xl">
+              <Calculator size={30} strokeWidth={2.5} />
             </div>
             <div>
-              <h1 className="text-3xl font-black text-slate-800 uppercase italic leading-none">Liquidaciones</h1>
-              <p className="text-slate-400 text-[10px] font-bold uppercase tracking-[0.3em] mt-3">Producción Real + Abonos de Tratamientos</p>
+              <h1 className="text-4xl font-black text-slate-900 uppercase italic tracking-tighter">Cierre de Caja</h1>
+              <p className="text-slate-400 text-[10px] font-black uppercase tracking-[0.3em] flex items-center gap-2 mt-2">
+                <TrendingUp size={12} className="text-emerald-500"/> Rendimiento por especialista
+              </p>
+            </div>
+          </div>
+
+          <div className="flex items-center gap-3 bg-white p-2 rounded-[2rem] shadow-sm border border-slate-100">
+            <div className="flex items-center gap-2 px-4 py-2 bg-slate-50 rounded-xl border border-slate-100">
+              <CalendarIcon size={16} className="text-blue-600"/>
+              <input 
+                type="month" 
+                value={mesSeleccionado} 
+                onChange={(e) => setMesSeleccionado(e.target.value)}
+                className="bg-transparent font-black text-xs uppercase outline-none text-slate-700"
+              />
+            </div>
+            <div className="relative group">
+              <Search className="absolute left-4 top-1/2 -translate-y-1/2 text-slate-300" size={16} />
+              <input 
+                type="text" 
+                placeholder="Buscar Dr..." 
+                className="pl-11 pr-6 py-3 bg-slate-50 rounded-xl text-xs font-bold border border-transparent focus:border-blue-500 outline-none transition-all w-64"
+                value={busqueda}
+                onChange={(e) => setBusqueda(e.target.value)}
+              />
             </div>
           </div>
         </div>
 
-        {/* TABLA PRINCIPAL - Protegida contra undefined */}
-        <div className="bg-white rounded-[3rem] shadow-sm border border-slate-100 overflow-hidden">
+        {/* KPI CARDS */}
+        <div className="grid grid-cols-1 md:grid-cols-3 gap-8">
+          <StatCard label="Producción Total" value={globalTotal} icon={<DollarSign size={20}/>} color="blue" />
+          <StatCard label="Honorarios a Pagar" value={globalHonorarios} icon={<Users size={20}/>} color="emerald" />
+          <StatCard label="Margen Clínica" value={globalUtilidad} icon={<ArrowUpRight size={20}/>} color="slate" isDark />
+        </div>
+
+        {/* TABLA DE LIQUIDACIONES */}
+        <div className="bg-white rounded-[3.5rem] shadow-xl shadow-slate-200/50 border border-slate-100 overflow-hidden">
           <table className="w-full text-left border-separate border-spacing-0">
             <thead>
-              <tr className="bg-slate-50/50 border-b border-slate-100">
-                <th className="px-8 py-6 text-[10px] font-black text-slate-400 uppercase tracking-widest">Profesional</th>
-                <th className="px-8 py-6 text-[10px] font-black text-slate-400 uppercase tracking-widest text-center">Atenciones</th>
-                <th className="px-8 py-6 text-[10px] font-black text-slate-400 uppercase tracking-widest text-center">Abonos Planes</th>
-                <th className="px-8 py-6 text-[10px] font-black text-slate-400 uppercase tracking-widest text-center">Total Realizado</th>
-                <th className="px-8 py-6 text-[10px] font-black text-slate-400 uppercase tracking-widest text-center">A Pagar (40%)</th>
-                <th className="px-8 py-6 text-[10px] font-black text-slate-400 uppercase tracking-widest text-right">Acción</th>
+              <tr className="bg-slate-900 text-white">
+                <th className="px-10 py-8 text-[10px] font-black uppercase tracking-widest">Especialista Responsable</th>
+                <th className="px-6 py-8 text-[10px] font-black uppercase tracking-widest text-center">Atenciones</th>
+                <th className="px-6 py-8 text-[10px] font-black uppercase tracking-widest text-center">Abonos Items</th>
+                <th className="px-6 py-8 text-[10px] font-black uppercase tracking-widest text-center">Producción</th>
+                <th className="px-6 py-8 text-[10px] font-black uppercase tracking-widest text-center">Comisión (40%)</th>
+                <th className="px-10 py-8 text-[10px] font-black uppercase tracking-widest text-right">Detalle</th>
               </tr>
             </thead>
-            <tbody className="divide-y divide-slate-50">
+            <tbody className="divide-y divide-slate-100">
               {cargando ? (
-                <tr><td colSpan={6} className="py-20 text-center"><Loader2 className="animate-spin mx-auto text-blue-600" /></td></tr>
-              ) : filtradas.map((liq) => (
-                <tr key={liq.id} className="hover:bg-slate-50/50 transition-all group">
-                  <td className="px-8 py-6">
-                    <p className="text-xs font-black text-slate-700 uppercase italic">{liq.nombre} {liq.apellido}</p>
-                    <p className="text-[9px] text-slate-400 font-bold uppercase mt-1">Corte: {liq.fecha}</p>
+                <tr>
+                  <td colSpan={6} className="py-32 text-center">
+                    <Loader2 className="animate-spin mx-auto text-blue-600" size={40} />
+                    <p className="mt-4 text-[10px] font-black text-slate-400 uppercase tracking-widest">Calculando balances...</p>
                   </td>
-                  {/* CORRECCIÓN: (liq.propiedad || 0).toLocaleString() asegura que nunca falle */}
-                  <td className="px-8 py-6 text-center text-xs font-bold text-slate-500">${(liq.detalle_atenciones || 0).toLocaleString()}</td>
-                  <td className="px-8 py-6 text-center text-xs font-bold text-blue-600">${(liq.detalle_abonos || 0).toLocaleString()}</td>
-                  <td className="px-8 py-6 text-center text-xs font-black text-slate-800">${(liq.realizado || 0).toLocaleString()}</td>
-                  <td className="px-8 py-6 text-center text-xs font-black text-emerald-600">${(liq.a_pagar || 0).toLocaleString()}</td>
-                  <td className="px-8 py-6 text-right">
-                    <div className="flex justify-end gap-2">
-                        <Link href={`/administracion/liquidaciones/${liq.id}`} className="p-2 bg-slate-100 text-slate-400 rounded-lg hover:bg-blue-600 hover:text-white transition-all">
-                            <Eye size={16} />
-                        </Link>
-                        <button className="bg-slate-900 text-white px-4 py-2 rounded-lg text-[9px] font-black uppercase hover:bg-emerald-600 transition-all">
-                            Liquidar
-                        </button>
+                </tr>
+              ) : filtradas.map((liq) => (
+                <tr key={liq.id} className="hover:bg-blue-50/30 transition-all group">
+                  <td className="px-10 py-7">
+                    <div className="flex items-center gap-4">
+                      <div className="w-12 h-12 bg-slate-100 rounded-2xl flex items-center justify-center font-black text-slate-400 group-hover:bg-blue-600 group-hover:text-white transition-all">
+                        {liq.nombreCompleto.charAt(0)}
+                      </div>
+                      <div>
+                        <p className="text-sm font-black text-slate-800 uppercase italic leading-none">{liq.nombreCompleto}</p>
+                        <p className="text-[9px] text-slate-400 font-bold uppercase mt-2 tracking-tighter">ID: {liq.user_id.substring(0,8)}</p>
+                      </div>
                     </div>
+                  </td>
+                  <td className="px-6 py-7 text-center text-xs font-bold text-slate-500">
+                    ${(liq.atenciones || 0).toLocaleString('es-CL')}
+                  </td>
+                  <td className="px-6 py-7 text-center text-xs font-bold text-blue-600">
+                    ${(liq.abonos || 0).toLocaleString('es-CL')}
+                  </td>
+                  <td className="px-6 py-7 text-center">
+                    <span className="bg-slate-100 px-4 py-2 rounded-xl text-xs font-black text-slate-800">
+                      ${(liq.total || 0).toLocaleString('es-CL')}
+                    </span>
+                  </td>
+                  <td className="px-6 py-7 text-center">
+                    <span className="text-sm font-black text-emerald-600">
+                      ${(liq.honorarios || 0).toLocaleString('es-CL')}
+                    </span>
+                  </td>
+                  <td className="px-10 py-7 text-right">
+                    <Link 
+                      href={`/administracion/liquidaciones/${liq.user_id}?mes=${mesSeleccionado}`}
+                      className="inline-flex items-center justify-center w-12 h-12 bg-slate-50 text-slate-400 rounded-2xl hover:bg-slate-900 hover:text-white transition-all shadow-sm"
+                    >
+                      <Eye size={18} />
+                    </Link>
                   </td>
                 </tr>
               ))}
             </tbody>
           </table>
         </div>
-
-        {/* RESUMEN KPI */}
-        <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
-          <div className="bg-white p-8 rounded-[2.5rem] border border-slate-100 shadow-sm">
-            <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest italic">Recaudación Global</p>
-            <p className="text-3xl font-black text-slate-800 mt-2">${(totalRealizado || 0).toLocaleString()}</p>
-          </div>
-          <div className="bg-white p-8 rounded-[2.5rem] border border-slate-100 shadow-sm">
-            <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest italic">Total Honorarios Doctor</p>
-            <p className="text-3xl font-black text-emerald-600 mt-2">${(totalHonorarios || 0).toLocaleString()}</p>
-          </div>
-          <div className="bg-blue-600 p-8 rounded-[2.5rem] shadow-xl shadow-blue-100 text-white relative overflow-hidden">
-            <p className="text-[10px] font-black text-blue-200 uppercase tracking-widest italic">Utilidad Estimada</p>
-            <p className="text-3xl font-black mt-2">${(utilidadClinica || 0).toLocaleString()}</p>
-            <DollarSign className="absolute -right-4 -bottom-4 text-white/10" size={100} />
-          </div>
-        </div>
-
       </div>
+    </div>
+  )
+}
+
+function StatCard({ label, value, icon, color, isDark }: any) {
+  return (
+    <div className={`p-10 rounded-[3rem] border transition-all hover:scale-[1.02] duration-300 ${
+      isDark ? 'bg-slate-900 border-slate-800 text-white shadow-2xl' : 'bg-white border-slate-100 text-slate-900 shadow-sm'
+    }`}>
+      <div className="flex justify-between items-start mb-6">
+        <div className={`p-3 rounded-2xl ${isDark ? 'bg-slate-800 text-blue-400' : `bg-${color}-50 text-${color}-600`}`}>
+          {icon}
+        </div>
+        <span className={`text-[8px] font-black uppercase tracking-[0.2em] px-3 py-1 rounded-full ${isDark ? 'bg-slate-800' : 'bg-slate-50'}`}>Actualizado</span>
+      </div>
+      <p className={`text-[10px] font-black uppercase tracking-widest opacity-60 mb-2`}>{label}</p>
+      <p className="text-4xl font-black italic tracking-tighter">${(value || 0).toLocaleString('es-CL')}</p>
     </div>
   )
 }

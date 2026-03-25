@@ -4,9 +4,10 @@ import { supabase } from '@/lib/supabase'
 import { crearCuentaStaff, actualizarCuentaStaff, eliminarCuentaStaff } from './actions' 
 import { 
   Plus, Search, Mail, Lock, Trash2, Stethoscope, X, Save, 
-  Loader2, UserCircle, ChevronRight, KeyRound, UserCog, ShieldCheck
+  Loader2, UserCircle, ChevronRight, KeyRound, UserCog, ShieldCheck, AtSign
 } from 'lucide-react'
 import { motion, AnimatePresence } from 'framer-motion'
+import { toast } from 'sonner'
 
 export default function GestionStaffPage() {
   const [staff, setStaff] = useState<any[]>([])
@@ -18,8 +19,12 @@ export default function GestionStaffPage() {
   const [busqueda, setBusqueda] = useState('')
 
   const initialState = { 
-    nombre: '', apellido: '', correo: '', password: '', 
-    especialidad_id: '', rol: 'DENTISTA' 
+    nombre: '', 
+    apellido: '', 
+    username: '', 
+    password: '', 
+    especialidad_id: '', 
+    rol: 'DENTISTA' 
   }
   const [form, setForm] = useState(initialState)
 
@@ -44,39 +49,60 @@ export default function GestionStaffPage() {
 
   const handleGuardar = async () => {
     if (guardando) return;
-    if (!form.nombre.trim() || (!editandoUser && (!form.correo.trim() || !form.password.trim()))) {
-        return alert("Por favor, completa los campos obligatorios.");
+    
+    // VALIDACIONES DE SEGURIDAD
+    const esNuevo = !editandoUser;
+    
+    if (!form.nombre.trim() || !form.apellido.trim()) {
+        return toast.error("Nombre y Apellido son requeridos");
     }
 
-    setGuardando(true)
+    if (esNuevo) {
+        if (!form.username.trim()) return toast.error("El usuario es obligatorio");
+        if (!form.password.trim()) return toast.error("La contraseña es obligatoria");
+        
+        // Validar formato de usuario (letras minúsculas, números y puntos únicamente)
+        const usernameRegex = /^[a-z0-9.]+$/;
+        if (!usernameRegex.test(form.username)) {
+            return toast.error("El usuario solo permite minúsculas, números y puntos.");
+        }
+    }
+
+    setGuardando(true);
+    const toastId = toast.loading(esNuevo ? "Creando cuenta..." : "Actualizando...");
+
     try {
       const res = editandoUser 
         ? await actualizarCuentaStaff(editandoUser.id, editandoUser.id, form)
-        : await crearCuentaStaff(form)
+        : await crearCuentaStaff(form);
       
       if (res.error) throw new Error(res.error);
 
+      toast.success(esNuevo ? "Cuenta generada exitosamente" : "Información actualizada", { id: toastId });
       setModalAbierto(false); 
       fetchData(); 
       resetForm();
     } catch (error: any) { 
-      alert("Error: " + error.message) 
+      toast.error("Error: " + error.message, { id: toastId });
     } finally { 
-      setGuardando(false) 
+      setGuardando(false);
     }
   }
 
   const handleEliminar = async () => {
-    if (guardando || !editandoUser || !confirm(`¿Eliminar acceso de ${editandoUser.nombre_completo}?`)) return
+    if (guardando || !editandoUser || !confirm(`¿Revocar acceso a ${editandoUser.nombre_completo}?`)) return
     setGuardando(true)
+    const toastId = toast.loading("Eliminando accesos...");
     try {
       const res = await eliminarCuentaStaff(editandoUser.id)
       if (res.error) throw new Error(res.error)
+      
+      toast.success("Accesos eliminados", { id: toastId });
       setModalAbierto(false); 
       fetchData(); 
       resetForm();
     } catch (error: any) { 
-        alert(error.message) 
+        toast.error(error.message, { id: toastId }); 
     } finally { 
         setGuardando(false) 
     }
@@ -84,12 +110,13 @@ export default function GestionStaffPage() {
 
   const abrirEditor = (persona: any) => {
     setEditandoUser(persona)
-    const [nombre, ...apellidos] = persona.nombre_completo.split(' ')
+    const nombres = persona.nombre_completo.split(' ');
     setForm({ 
         ...initialState, 
-        nombre: nombre, 
-        apellido: apellidos.join(' '), 
+        nombre: nombres[0] || '', 
+        apellido: nombres.slice(1).join(' ') || '', 
         rol: persona.rol,
+        username: persona.username || '', 
         especialidad_id: '' 
     })
     setModalAbierto(true)
@@ -104,6 +131,7 @@ export default function GestionStaffPage() {
     <div className="min-h-screen bg-[#F8FAFC] p-8 pb-20 font-sans relative">
       <div className="max-w-7xl mx-auto space-y-8">
         
+        {/* HEADER */}
         <header className="bg-white p-10 rounded-[3rem] shadow-sm border border-slate-100 flex flex-col md:flex-row justify-between items-center gap-6">
           <div className="flex items-center gap-6">
             <div className="bg-slate-900 p-5 rounded-[2rem] text-white shadow-xl">
@@ -111,17 +139,31 @@ export default function GestionStaffPage() {
             </div>
             <div>
               <h1 className="text-3xl font-black text-slate-800 uppercase italic leading-none">Equipo Clínico</h1>
-              <p className="text-slate-400 text-[10px] font-bold uppercase tracking-widest mt-2">Gestión de roles y accesos</p>
+              <p className="text-slate-400 text-[10px] font-bold uppercase tracking-widest mt-2">Gestión de roles e identidades</p>
             </div>
           </div>
-          <button 
-            onClick={() => { resetForm(); setModalAbierto(true); }} 
-            className="bg-blue-600 text-white px-10 py-5 rounded-3xl font-black text-xs uppercase hover:bg-slate-900 transition-all shadow-xl shadow-blue-100"
-          >
-            <Plus size={18} /> Nuevo Miembro
-          </button>
+          
+          <div className="flex items-center gap-4 w-full md:w-auto">
+            <div className="relative flex-1">
+              <Search className="absolute left-4 top-1/2 -translate-y-1/2 text-slate-300" size={18} />
+              <input 
+                type="text" 
+                placeholder="Buscar por nombre..." 
+                className="pl-12 pr-6 py-4 bg-slate-50 border-none rounded-2xl text-xs font-bold w-full focus:ring-2 ring-blue-500/20 outline-none shadow-inner"
+                value={busqueda}
+                onChange={(e) => setBusqueda(e.target.value)}
+              />
+            </div>
+            <button 
+              onClick={() => { resetForm(); setModalAbierto(true); }} 
+              className="bg-blue-600 text-white px-8 py-4 rounded-2xl font-black text-xs uppercase hover:bg-slate-900 transition-all shadow-xl shadow-blue-100 whitespace-nowrap"
+            >
+              <Plus size={18} /> Nuevo Registro
+            </button>
+          </div>
         </header>
 
+        {/* LISTADO DE STAFF */}
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
           {staff
             .filter(p => p.nombre_completo.toLowerCase().includes(busqueda.toLowerCase()))
@@ -132,48 +174,48 @@ export default function GestionStaffPage() {
                     onClick={() => abrirEditor(persona)} 
                     className="bg-white p-8 rounded-[2.5rem] border border-slate-100 shadow-sm cursor-pointer group relative overflow-hidden"
                 >
-                    <div className={`absolute top-0 right-0 p-4 text-[8px] font-black uppercase tracking-widest ${
+                    <div className={`absolute top-0 right-0 p-4 text-[8px] font-black uppercase tracking-widest rounded-bl-2xl ${
                         persona.rol === 'ADMIN' ? 'bg-red-500 text-white' : 
-                        persona.rol === 'DENTISTA' ? 'bg-blue-50 text-blue-600' : 'bg-emerald-50 text-white'
+                        persona.rol === 'DENTISTA' ? 'bg-blue-500 text-white' : 'bg-emerald-500 text-white'
                     }`}>
                         {persona.rol}
                     </div>
-                    <div className={`w-14 h-14 rounded-2xl flex items-center justify-center mb-6 ${
+                    <div className={`w-14 h-14 rounded-2xl flex items-center justify-center mb-6 shadow-sm ${
                         persona.rol === 'DENTISTA' ? 'bg-blue-50 text-blue-600' : 'bg-emerald-50 text-emerald-600'
                     }`}>
                         {persona.rol === 'DENTISTA' ? <Stethoscope size={28}/> : <UserCircle size={28}/>}
                     </div>
-                    <h3 className="text-lg font-black text-slate-800 uppercase">{persona.nombre_completo}</h3>
-                    <p className="text-slate-400 text-[10px] font-bold uppercase mt-1">
-                        {persona.especialidad || 'Personal Administrativo'}
+                    <h3 className="text-lg font-black text-slate-800 uppercase leading-none">{persona.nombre_completo}</h3>
+                    <div className="flex items-center gap-2 mt-2">
+                      <AtSign size={10} className="text-blue-500"/>
+                      <p className="text-slate-400 text-[10px] font-bold lowercase tracking-tight">
+                        {persona.username || 'sin_usuario'}
+                      </p>
+                    </div>
+                    <p className="text-slate-300 text-[9px] font-black uppercase mt-4 tracking-tighter">
+                        {persona.especialidad || 'Área Administrativa'}
                     </p>
                 </motion.div>
             ))}
         </div>
       </div>
 
+      {/* MODAL DE EDICIÓN / CREACIÓN */}
       <AnimatePresence>
         {modalAbierto && (
           <div className="fixed inset-0 bg-slate-900/60 backdrop-blur-md z-[999999] flex justify-end items-start p-4">
-            {/* Overlay para cerrar al hacer clic fuera */}
             <div className="absolute inset-0" onClick={() => !guardando && setModalAbierto(false)} />
 
             <motion.div 
-              initial={{ x: '100%', opacity: 0 }} 
-              animate={{ x: 0, opacity: 1 }} 
-              exit={{ x: '100%', opacity: 0 }}
+              initial={{ x: '100%', opacity: 0 }} animate={{ x: 0, opacity: 1 }} exit={{ x: '100%', opacity: 0 }}
               transition={{ type: 'spring', damping: 25, stiffness: 200 }}
               className="bg-white w-full max-w-lg mt-24 rounded-[3rem] shadow-2xl flex flex-col relative z-10 overflow-hidden border border-slate-100 h-[calc(100vh-140px)]"
             >
               <div className="p-10 flex justify-between items-center border-b border-slate-100 bg-slate-50/50">
                 <h2 className="text-2xl font-black text-slate-800 uppercase italic">
-                   {editandoUser ? 'Editar Miembro' : 'Nuevo Registro'}
+                    {editandoUser ? 'Ficha de Staff' : 'Nuevo Acceso'}
                 </h2>
-                <button 
-                  disabled={guardando}
-                  onClick={() => setModalAbierto(false)} 
-                  className="p-4 bg-white shadow-lg border border-slate-100 rounded-2xl text-slate-400 hover:text-red-500 transition-all disabled:opacity-50"
-                >
+                <button onClick={() => setModalAbierto(false)} className="p-4 bg-white shadow-lg border border-slate-100 rounded-2xl text-slate-400 hover:text-red-500 transition-all">
                   <X size={24} />
                 </button>
               </div>
@@ -181,16 +223,16 @@ export default function GestionStaffPage() {
               <div className="flex-1 p-10 space-y-6 overflow-y-auto">
                 <div className="space-y-3">
                   <label className="text-[10px] font-black text-slate-400 uppercase italic ml-3 flex items-center gap-2">
-                    <ShieldCheck size={12}/> Rol del Usuario
+                    <ShieldCheck size={12}/> Tipo de Cuenta
                   </label>
                   <select 
-                    className="w-full bg-slate-50 p-5 rounded-2xl text-xs font-bold border-none shadow-inner outline-none focus:ring-2 ring-blue-500/20" 
+                    className="w-full bg-slate-50 p-5 rounded-2xl text-xs font-bold border-none shadow-inner outline-none focus:ring-2 ring-blue-500/20 appearance-none" 
                     value={form.rol} 
                     onChange={(e) => setForm({...form, rol: e.target.value})}
                   >
                     <option value="DENTISTA">Dentista / Especialista</option>
                     <option value="RECEPCIONISTA">Recepcionista</option>
-                    <option value="ADMIN">Administrador</option>
+                    <option value="ADMIN">Administrador General</option>
                   </select>
                 </div>
 
@@ -200,10 +242,27 @@ export default function GestionStaffPage() {
                 </div>
 
                 {!editandoUser && (
-                  <div className="space-y-4 bg-slate-50 p-6 rounded-[2.5rem] border border-slate-100 shadow-inner">
-                    <p className="text-[10px] font-black text-slate-400 uppercase italic flex items-center gap-2"><KeyRound size={12}/> Credenciales de Acceso</p>
-                    <Input label="Email Institucional" value={form.correo} icon={<Mail size={14}/>} onChange={(v:any) => setForm({...form, correo: v})} />
-                    <Input label="Contraseña Temporal" value={form.password} type="password" icon={<Lock size={14}/>} onChange={(v:any) => setForm({...form, password: v})} />
+                  <div className="space-y-4 bg-slate-50 p-8 rounded-[2.5rem] border border-slate-100 shadow-inner">
+                    <p className="text-[10px] font-black text-slate-400 uppercase italic flex items-center gap-2 mb-2"><KeyRound size={12}/> Credenciales de Acceso</p>
+                    
+                    <Input 
+                      label="Usuario (ID)" 
+                      placeholder="ej: juan.perez"
+                      value={form.username} 
+                      icon={<AtSign size={14}/>} 
+                      onChange={(v:any) => setForm({...form, username: v.toLowerCase().replace(/\s+/g, '')})} 
+                    />
+                    
+                    <Input 
+                      label="Contraseña" 
+                      value={form.password} 
+                      type="password" 
+                      icon={<Lock size={14}/>} 
+                      onChange={(v:any) => setForm({...form, password: v})} 
+                    />
+                    <p className="text-[8px] text-slate-400 font-bold leading-tight">
+                        * Solo minúsculas, números y puntos. Sin espacios.
+                    </p>
                   </div>
                 )}
 
@@ -213,30 +272,33 @@ export default function GestionStaffPage() {
                         <Stethoscope size={12}/> Especialidad Clínica
                     </label>
                     <select 
-                      className="w-full bg-slate-50 p-5 rounded-2xl text-xs font-bold border-none shadow-inner outline-none focus:ring-2 ring-blue-500/20" 
+                      className="w-full bg-slate-50 p-5 rounded-2xl text-xs font-bold border-none shadow-inner outline-none focus:ring-2 ring-blue-500/20 appearance-none" 
                       value={form.especialidad_id} 
                       onChange={(e) => setForm({...form, especialidad_id: e.target.value})}
                     >
-                      <option value="">Seleccionar especialidad...</option>
+                      <option value="">Seleccionar...</option>
                       {especialidades.map(esp => <option key={esp.id} value={esp.id}>{esp.nombre}</option>)}
                     </select>
                   </div>
                 )}
 
                 {editandoUser && (
-                  <button onClick={handleEliminar} className="w-full p-4 text-red-500 font-black text-[10px] uppercase hover:bg-red-50 rounded-2xl transition-all flex items-center justify-center gap-2">
-                    <Trash2 size={14}/> Revocar todos los accesos
-                  </button>
+                  <div className="pt-6 border-t border-slate-100">
+                    <button onClick={handleEliminar} className="w-full p-5 bg-red-50 text-red-500 font-black text-[10px] uppercase hover:bg-red-500 hover:text-white rounded-3xl transition-all flex items-center justify-center gap-2">
+                      <Trash2 size={16}/> Eliminar accesos permanentemente
+                    </button>
+                  </div>
                 )}
               </div>
 
-              <div className="p-10 border-t bg-slate-50/50">
+              <div className="p-10 border-t bg-white">
                 <button 
-                  onClick={handleGuardar} disabled={guardando} 
-                  className="w-full bg-blue-600 text-white py-6 rounded-3xl font-black text-xs uppercase shadow-xl hover:bg-slate-900 transition-all flex items-center justify-center gap-3"
+                  onClick={handleGuardar} 
+                  disabled={guardando} 
+                  className="w-full bg-slate-900 text-white py-6 rounded-[2rem] font-black text-xs uppercase shadow-xl hover:bg-blue-600 transition-all flex items-center justify-center gap-3 disabled:bg-slate-300"
                 >
                   {guardando ? <Loader2 className="animate-spin" /> : <Save size={18}/>}
-                  {editandoUser ? 'Guardar Cambios' : 'Crear Cuenta de Staff'}
+                  {editandoUser ? 'Actualizar Ficha' : 'Generar Acceso'}
                 </button>
               </div>
             </motion.div>
@@ -247,14 +309,16 @@ export default function GestionStaffPage() {
   )
 }
 
-function Input({ label, value, onChange, icon, type = "text" }: any) {
+function Input({ label, value, onChange, icon, type = "text", placeholder = "" }: any) {
   return (
     <div className="space-y-2">
       <label className="text-[10px] font-black text-slate-400 uppercase italic ml-3 flex items-center gap-2">{icon} {label}</label>
       <input 
-        type={type} value={value} 
+        type={type} 
+        value={value} 
+        placeholder={placeholder}
         onChange={(e) => onChange(e.target.value)} 
-        className="w-full bg-white p-5 rounded-2xl text-xs font-bold outline-none border border-slate-100 shadow-sm focus:ring-2 ring-blue-500/10" 
+        className="w-full bg-white p-5 rounded-2xl text-xs font-bold outline-none border border-slate-100 shadow-sm focus:ring-2 ring-blue-500/10 placeholder:text-slate-200" 
       />
     </div>
   )

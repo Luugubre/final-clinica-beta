@@ -4,11 +4,13 @@ import { useParams } from 'next/navigation'
 import { supabase } from '@/lib/supabase'
 import { Save, Loader2, Info } from 'lucide-react'
 import { motion } from 'framer-motion'
+import { toast } from 'sonner' // Opcional: para notificaciones más bonitas
 
 export default function DatosPersonalesPage() {
   const { id } = useParams()
   const [cargando, setCargando] = useState(true)
   const [guardando, setGuardando] = useState(false)
+  const [listaConvenios, setListaConvenios] = useState<string[]>([]) // Nuevo estado para convenios
   
   const [datos, setDatos] = useState<any>({
     tipo_paciente: '',
@@ -36,29 +38,54 @@ export default function DatosPersonalesPage() {
   })
 
   useEffect(() => {
-    if (id) fetchDatos()
+    if (id) {
+      cargarTodo()
+    }
   }, [id])
 
-  async function fetchDatos() {
-    const { data, error } = await supabase.from('pacientes').select('*').eq('id', id).single()
-    if (error) console.error("Error al cargar:", error.message)
-    if (data) {
-      // Saneamiento inicial: null a string vacío para los inputs
-      const saneados = Object.fromEntries(
-        Object.entries(data).map(([key, val]) => [key, val === null ? '' : val])
-      )
-      setDatos(saneados)
+  // Función unificada para cargar convenios y datos del paciente
+  async function cargarTodo() {
+    setCargando(true)
+    try {
+      // 1. Cargamos los convenios desde la tabla 'convenios'
+      const { data: convs, error: errConv } = await supabase
+        .from('convenios')
+        .select('nombre_convenio')
+        .eq('estado', 'Habilitado') // Solo los activos
+        .order('nombre_convenio', { ascending: true })
+
+      if (errConv) throw errConv
+      
+      const nombresConvenios = convs?.map(c => c.nombre_convenio) || []
+      // Añadimos "Sin convenio" al principio si no existe
+      setListaConvenios(['Sin convenio', ...nombresConvenios.filter(n => n !== 'Sin convenio')])
+
+      // 2. Cargamos los datos del paciente
+      const { data: paciente, error: errPac } = await supabase
+        .from('pacientes')
+        .select('*')
+        .eq('id', id)
+        .single()
+
+      if (errPac) throw errPac
+
+      if (paciente) {
+        const saneados = Object.fromEntries(
+          Object.entries(paciente).map(([key, val]) => [key, val === null ? '' : val])
+        )
+        setDatos(saneados)
+      }
+    } catch (error: any) {
+      console.error("Error en carga:", error.message)
+    } finally {
+      setCargando(false)
     }
-    setCargando(false)
   }
 
   const handleGuardar = async () => {
-    if (!id) return alert("ID de paciente no encontrado en la URL");
+    if (!id) return alert("ID de paciente no encontrado");
     
     setGuardando(true)
-    console.log("Enviando actualización para ID:", id);
-
-    // 1. CONSTRUCCIÓN DEL PAYLOAD (Mapeo estricto 1:1 con tu base de datos)
     const payload = {
       rut: datos.rut ? datos.rut.replace(/\./g, '').toUpperCase().trim() : null,
       nombre: datos.nombre || null,
@@ -85,30 +112,17 @@ export default function DatosPersonalesPage() {
     }
 
     try {
-      // 2. EJECUCIÓN DE LA ACTUALIZACIÓN
-      // Usamos .select() para forzar el retorno de datos y confirmar el cambio
-      const { data: updateData, error: updateError, status } = await supabase
+      const { data: updateData, error: updateError } = await supabase
         .from('pacientes')
         .update(payload)
         .eq('id', id)
         .select()
 
       if (updateError) throw updateError
-
-      // 3. VALIDACIÓN DE RESULTADO
-      if (updateData && updateData.length > 0) {
-        alert("✅ Datos actualizados correctamente");
-        setDatos(Object.fromEntries(
-          Object.entries(updateData[0]).map(([key, val]) => [key, val === null ? '' : val])
-        ));
-      } else {
-        console.warn("Supabase respondió con éxito pero 0 filas afectadas. Status:", status);
-        alert("⚠️ No se detectaron cambios nuevos o no tienes permisos para editar este registro.");
-      }
+      if (updateData) alert("✅ Datos actualizados correctamente")
 
     } catch (error: any) {
-      console.error("DETALLE ERROR SUPABASE:", error)
-      alert(`❌ Error técnico: ${error.message}`)
+      alert(`❌ Error: ${error.message}`)
     } finally {
       setGuardando(false)
     }
@@ -118,6 +132,7 @@ export default function DatosPersonalesPage() {
 
   return (
     <motion.div initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} className="space-y-8 pb-20">
+      {/* HEADER DE LA PÁGINA */}
       <div className="flex justify-between items-center bg-white p-8 rounded-[2.5rem] shadow-sm border border-slate-100">
         <div>
           <h3 className="text-2xl font-black tracking-tight text-slate-800 uppercase italic leading-none">Información Personal</h3>
@@ -133,6 +148,7 @@ export default function DatosPersonalesPage() {
         </button>
       </div>
 
+      {/* SECCIÓN DATOS REQUERIDOS */}
       <section className="bg-white p-10 rounded-[3rem] shadow-sm border border-slate-100">
         <h4 className="text-blue-600 font-black text-[10px] uppercase tracking-[0.3em] mb-10 flex items-center gap-2">
           <Info size={14}/> Datos Requeridos
@@ -148,12 +164,20 @@ export default function DatosPersonalesPage() {
         </div>
       </section>
 
+      {/* SECCIÓN CAMPOS OPCIONALES */}
       <section className="bg-white p-10 rounded-[3rem] shadow-sm border border-slate-100">
         <h4 className="text-slate-400 font-black text-[10px] uppercase tracking-[0.3em] mb-10">Campos Opcionales</h4>
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-8">
-          <InputGroup label="Convenio (Previsión)" type="select" value={datos.prevision} 
+          
+          {/* AQUÍ ESTÁ EL SELECTOR DINÁMICO DE CONVENIOS */}
+          <InputGroup 
+            label="Convenio (Previsión)" 
+            type="select" 
+            value={datos.prevision} 
             onChange={(v:any) => setDatos({...datos, prevision: v})} 
-            options={['Sin convenio', 'black power', 'Gabriela mistral', 'cesfam la granja', 'Jorge hunneus', 'san jose de la familia', 'tarjeta + comunidad']} />
+            options={listaConvenios} // USAMOS LA LISTA CARGADA DE LA DB
+          />
+
           <InputGroup label="Nombre Social" value={datos.nombre_social} onChange={(v:any) => setDatos({...datos, nombre_social: v})} />
           <InputGroup label="Email" type="email" value={datos.email} onChange={(v:any) => setDatos({...datos, email: v})} />
           <InputGroup label="N° Interno" value={datos.numero_interno} onChange={(v:any) => setDatos({...datos, numero_interno: v})} />

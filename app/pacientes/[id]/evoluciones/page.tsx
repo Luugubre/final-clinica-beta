@@ -142,7 +142,7 @@ export default function EvolucionesPage() {
       {/* LISTADO */}
       <div className="space-y-6">
         {evoluciones.map(ev => (
-          <motion.div layout initial={{ opacity: 0 }} animate={{ opacity: 1 }} key={ev.id} className="bg-white rounded-[2.5rem] shadow-sm border border-slate-100 group hover:border-blue-200 transition-all">
+          <motion.div layout initial={{ opacity: 0 }} animate={{ opacity: 1 }} key={ev.id} className="bg-white rounded-[1.5rem] shadow-sm border border-slate-100 group hover:border-blue-200 transition-all">
             <div className="p-7">
               <div className="flex justify-between items-start mb-6">
                 <div className="flex items-center gap-4">
@@ -196,7 +196,7 @@ export default function EvolucionesPage() {
       {/* MODAL (NUEVO / EDITAR) */}
       <AnimatePresence>
         {modalAbierto && (
-          <div className="fixed inset-0 bg-slate-900/70 backdrop-blur-md z-[500] flex items-center justify-center p-4">
+          <div className="fixed inset-0 bg-slate-900/70 backdrop-blur-md z-[500] flex items-start justify-center p-4 pt-42">
             <motion.div initial={{ scale: 0.9, opacity: 0 }} animate={{ scale: 1, opacity: 1 }} exit={{ scale: 0.9, opacity: 0 }} className="bg-white w-full max-w-2xl rounded-[3.5rem] p-10 shadow-2xl relative">
               <button onClick={cerrarModal} className="absolute top-8 right-8 text-slate-300 hover:text-red-500 transition-colors"><X/></button>
               
