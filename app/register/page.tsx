@@ -5,6 +5,7 @@ import { useRouter } from 'next/navigation'
 import Link from 'next/link'
 import { UserPlus, Loader2, LogIn, ClipboardPlus, Stethoscope } from 'lucide-react'
 import { motion, AnimatePresence } from 'framer-motion'
+import { toast } from 'sonner'
 
 export default function RegisterPage() {
   const [email, setEmail] = useState('')
@@ -18,9 +19,13 @@ export default function RegisterPage() {
 
   useEffect(() => {
     async function fetchEspecialidades() {
-      const { data, error } = await supabase.from('especialidades').select('*').order('nombre')
-      if (error) console.error("Error cargando especialidades:", error.message)
-      setEspecialidades(data || [])
+      try {
+        const { data, error } = await supabase.from('especialidades').select('*').order('nombre')
+        if (error) throw error
+        setEspecialidades(data || [])
+      } catch (error: any) {
+        console.error("Error cargando especialidades:", error.message)
+      }
     }
     fetchEspecialidades()
   }, [])
@@ -29,7 +34,7 @@ export default function RegisterPage() {
     e.preventDefault()
     
     if (rol === 'DENTISTA' && !especialidadId) {
-      return alert("Por favor, selecciona tu especialidad")
+      return toast.error("Por favor, selecciona tu especialidad")
     }
 
     setCargando(true)
@@ -44,18 +49,15 @@ export default function RegisterPage() {
         password: cleanPassword,
       })
 
-      // Manejamos el caso donde el usuario ya existe pero no se terminó el registro de perfiles
       if (authError) throw new Error(`Auth: ${authError.message}`)
 
       if (authData.user) {
-        console.log("Usuario autenticado, sincronizando perfiles...")
-
-        // 2. Creación/Actualización del perfil general (UPSERT evita el error de duplicado)
+        // 2. Creación/Actualización del perfil general
         const { error: profileError } = await supabase
           .from('perfiles')
           .upsert({ 
             id: authData.user.id, 
-            nombre_completo: nombre, 
+            nombre_completo: nombre.trim(), 
             rol: rol 
           }, { onConflict: 'id' })
 
@@ -63,67 +65,87 @@ export default function RegisterPage() {
 
         // 3. Registro Profesional (Solo si es DENTISTA)
         if (rol === 'DENTISTA') {
-          console.log("Sincronizando perfil profesional...")
+          const partesNombre = nombre.trim().split(' ')
+          const nombreSolo = partesNombre[0]
+          const apellidoSolo = partesNombre.slice(1).join(' ') || ' '
+
           const { error: proError } = await supabase
             .from('profesionales')
             .upsert({
               user_id: authData.user.id,
-              nombre: nombre.split(' ')[0],
-              apellido: nombre.split(' ').slice(1).join(' ') || '',
-              especialidad_id: especialidadId
+              nombre: nombreSolo,
+              apellido: apellidoSolo,
+              especialidad_id: especialidadId,
+              activo: true
             }, { onConflict: 'user_id' })
           
           if (proError) throw new Error(`Tabla Profesionales: ${proError.message}`)
         }
 
-        alert("¡Cuenta configurada exitosamente!")
-        router.push('/login')
+        toast.success("¡Cuenta configurada exitosamente!")
+        // Pequeña pausa para que el usuario vea el toast antes de redirigir
+        setTimeout(() => {
+          router.push('/login')
+        }, 1500)
       }
     } catch (err: any) {
       console.error("DETALLE DEL ERROR:", err)
-      alert(err.message)
-    } finally {
+      toast.error(err.message || "Error al crear la cuenta")
       setCargando(false)
     }
   }
 
   return (
-    <main className="min-h-screen bg-slate-50 flex items-center justify-center p-6 text-slate-900">
-      <div className="bg-white w-full max-w-md rounded-[3rem] p-12 shadow-2xl border border-slate-100">
+    <main className="min-h-screen bg-[#F8FAFC] flex items-center justify-center p-6 text-slate-900 font-sans">
+      <motion.div 
+        initial={{ opacity: 0, scale: 0.95 }}
+        animate={{ opacity: 1, scale: 1 }}
+        className="bg-white w-full max-w-md rounded-[3rem] p-12 max-md:p-8 shadow-2xl border border-slate-100 text-left"
+      >
         
         <div className="flex flex-col items-center mb-8 text-center">
-          <div className="bg-blue-600 p-4 rounded-3xl text-white mb-4 shadow-xl shadow-blue-100">
+          <div className="bg-blue-600 p-4 rounded-3xl text-white mb-4 shadow-xl shadow-blue-200">
             <ClipboardPlus size={32} />
           </div>
-          <h1 className="text-3xl font-black text-slate-900 tracking-tighter">Únete a DentaPro</h1>
+          <h1 className="text-3xl font-black text-slate-900 tracking-tighter text-center leading-tight">Únete a DentaPro</h1>
           <p className="text-slate-400 font-bold uppercase text-[10px] tracking-[0.3em] mt-1 text-center">Configuración de cuenta nueva</p>
         </div>
         
-        <form onSubmit={handleRegister} className="space-y-5">
-          <div className="space-y-4">
+        <form onSubmit={handleRegister} className="space-y-5 text-left">
+          <div className="space-y-4 text-left">
             <input 
-              type="text" placeholder="Nombre completo" 
-              className="w-full p-4 bg-slate-50 border-2 border-transparent rounded-2xl outline-none focus:border-blue-500 transition-all font-medium text-slate-700 shadow-sm"
-              onChange={(e) => setNombre(e.target.value)} required 
+              type="text" 
+              placeholder="Nombre completo" 
+              className="w-full p-4 bg-slate-50 border-2 border-transparent rounded-2xl outline-none focus:border-blue-500 transition-all font-medium text-slate-900 shadow-inner"
+              value={nombre}
+              onChange={(e) => setNombre(e.target.value)} 
+              required 
             />
             
             <input 
-              type="email" placeholder="Correo electrónico" 
-              className="w-full p-4 bg-slate-50 border-2 border-transparent rounded-2xl outline-none focus:border-blue-500 transition-all font-medium text-slate-700 shadow-sm"
-              onChange={(e) => setEmail(e.target.value)} required 
+              type="email" 
+              placeholder="Correo electrónico" 
+              className="w-full p-4 bg-slate-50 border-2 border-transparent rounded-2xl outline-none focus:border-blue-500 transition-all font-medium text-slate-900 shadow-inner"
+              value={email}
+              onChange={(e) => setEmail(e.target.value)} 
+              required 
             />
             
             <input 
-              type="password" placeholder="Contraseña (mín. 6 caracteres)" 
-              className="w-full p-4 bg-slate-50 border-2 border-transparent rounded-2xl outline-none focus:border-blue-500 transition-all font-medium text-slate-700 shadow-sm"
-              onChange={(e) => setPassword(e.target.value)} required 
+              type="password" 
+              placeholder="Contraseña (mín. 6 caracteres)" 
+              className="w-full p-4 bg-slate-50 border-2 border-transparent rounded-2xl outline-none focus:border-blue-500 transition-all font-medium text-slate-900 shadow-inner"
+              value={password}
+              onChange={(e) => setPassword(e.target.value)} 
+              required 
             />
 
-            <div className="space-y-2">
-              <label className="text-[10px] font-black text-slate-400 uppercase ml-2 tracking-widest">Tipo de acceso</label>
+            <div className="space-y-2 text-left">
+              <label className="text-[10px] font-black text-slate-400 uppercase ml-2 tracking-widest text-left">Tipo de acceso</label>
               <select 
-                className="w-full p-4 bg-slate-50 border-2 border-transparent rounded-2xl outline-none focus:border-blue-500 transition-all font-bold text-slate-700 shadow-sm"
-                value={rol} onChange={(e) => setRol(e.target.value)}
+                className="w-full p-4 bg-slate-50 border-none rounded-2xl outline-none focus:ring-2 ring-blue-500/20 transition-all font-bold text-slate-700 shadow-inner appearance-none cursor-pointer"
+                value={rol} 
+                onChange={(e) => setRol(e.target.value)}
               >
                 <option value="RECEPCIONISTA">Recepcionista / Secretaria</option>
                 <option value="DENTISTA">Odontólogo / Especialista</option>
@@ -137,19 +159,19 @@ export default function RegisterPage() {
                   initial={{ opacity: 0, height: 0 }}
                   animate={{ opacity: 1, height: 'auto' }}
                   exit={{ opacity: 0, height: 0 }}
-                  className="space-y-2 overflow-hidden"
+                  className="space-y-2 overflow-hidden text-left"
                 >
-                  <label className="text-[10px] font-black text-blue-600 uppercase ml-2 tracking-widest flex items-center gap-1">
+                  <label className="text-[10px] font-black text-blue-600 uppercase ml-2 tracking-widest flex items-center gap-1 text-left">
                     <Stethoscope size={10} /> Especialidad Médica
                   </label>
                   <select 
                     required
-                    className="w-full p-4 bg-blue-50 border-2 border-blue-100 rounded-2xl outline-none focus:border-blue-500 transition-all font-bold text-blue-900"
+                    className="w-full p-4 bg-blue-50 border-none rounded-2xl outline-none focus:ring-2 ring-blue-500 transition-all font-bold text-blue-900 appearance-none cursor-pointer"
                     value={especialidadId} 
                     onChange={(e) => setEspecialidadId(e.target.value)}
                   >
                     <option value="">Selecciona tu área...</option>
-                    {especialidades.map(esp => (
+                    {especialidades.map((esp: any) => (
                       <option key={esp.id} value={esp.id}>{esp.nombre}</option>
                     ))}
                   </select>
@@ -162,7 +184,7 @@ export default function RegisterPage() {
             <button 
               type="submit"
               disabled={cargando} 
-              className="w-full bg-blue-600 text-white py-5 rounded-3xl font-black text-lg shadow-xl shadow-blue-200 flex justify-center items-center gap-2 hover:bg-blue-700 transition-all active:scale-95 disabled:bg-slate-300"
+              className="w-full bg-blue-600 text-white py-5 rounded-3xl font-black text-lg shadow-xl shadow-blue-100 flex justify-center items-center gap-2 hover:bg-blue-700 transition-all active:scale-95 disabled:bg-slate-300"
             >
               {cargando ? <Loader2 className="animate-spin" /> : <UserPlus size={20} />}
               {cargando ? 'Sincronizando...' : 'Crear mi Cuenta'}
@@ -173,7 +195,7 @@ export default function RegisterPage() {
             </Link>
           </div>
         </form>
-      </div>
+      </motion.div>
     </main>
   )
 }
