@@ -123,7 +123,6 @@ export default function OdontogramaPage() {
 
       <div className="bg-slate-50/30 p-10 rounded-[3rem] border-2 border-slate-100 overflow-x-auto custom-scrollbar">
         <div className="min-w-[1000px] flex flex-col gap-14 items-center">
-          {/* Arcada Superior */}
           <div className="flex justify-center items-end gap-1">
             <div className="flex gap-1 border-r-4 border-slate-100 pr-4">
               {c1.map(pid => <DienteMaestro key={pid} id={pid} datos={dentadura[pid]} itemsDiente={itemsGlobales.filter(i => i.diente_id === pid)} onClickCara={cambiarEstadoCara} onDienteClick={cambiarEstadoGeneral} superior />)}
@@ -133,7 +132,6 @@ export default function OdontogramaPage() {
             </div>
           </div>
 
-          {/* Arcada Inferior */}
           <div className="flex justify-center items-start gap-1">
             <div className="flex gap-1 border-r-4 border-slate-100 pr-4">
               {c3.map(pid => <DienteMaestro key={pid} id={pid} datos={dentadura[pid]} itemsDiente={itemsGlobales.filter(i => i.diente_id === pid)} onClickCara={cambiarEstadoCara} onDienteClick={cambiarEstadoGeneral} superior={false} />)}
@@ -156,8 +154,9 @@ function DienteMaestro({ id, datos, onClickCara, onDienteClick, superior = false
     realizado: i.estado === 'realizado'
   }));
 
+  // CORRECCIÓN: Tipado explícito para 'ico' para evitar error en el build de Vercel
   const colorTratamiento = (tipo: string) => {
-    const item = iconosTratamientos.find(ico => ico.tipo === tipo);
+    const item = iconosTratamientos.find((ico: any) => ico.tipo === tipo);
     return item?.realizado ? "#10b981" : "#f43f5e"; 
   };
 
