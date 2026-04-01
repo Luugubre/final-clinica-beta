@@ -9,7 +9,6 @@ const supabaseAdmin = createClient(
 
 const VIRTUAL_DOMAIN = "@dentapro.com";
 
-// --- FUNCIÓN PARA CREAR ---
 export async function crearCuentaProfesional(formData: any) {
   const { nombre, apellido, username, password, rol, especialidad_id, rut } = formData;
   const nombreCompleto = `${nombre} ${apellido}`;
@@ -44,7 +43,6 @@ export async function crearCuentaProfesional(formData: any) {
   }
 }
 
-// --- FUNCIÓN PARA ACTUALIZAR ---
 export async function actualizarCuentaProfesional(id: string, userId: string, formData: any) {
   try {
     const { nombre, apellido, especialidad_id, rol, rut } = formData;
@@ -70,7 +68,6 @@ export async function actualizarCuentaProfesional(id: string, userId: string, fo
   }
 }
 
-// --- FUNCIÓN PARA ELIMINAR ---
 export async function eliminarCuentaProfesional(userId: string) {
   try {
     await supabaseAdmin.from('profesionales').delete().eq('user_id', userId);
@@ -82,8 +79,7 @@ export async function eliminarCuentaProfesional(userId: string) {
   }
 }
 
-// --- ALIAS DE COMPATIBILIDAD ---
-// Esto permite que el archivo page.tsx que usa "Staff" funcione correctamente
+// --- NO BORRES ESTO: ES LO QUE ARREGLA EL ERROR DE VERCEL ---
 export const crearCuentaStaff = crearCuentaProfesional;
 export const actualizarCuentaStaff = actualizarCuentaProfesional;
 export const eliminarCuentaStaff = eliminarCuentaProfesional;
