@@ -6,7 +6,7 @@ import {
   Activity, X, ChevronLeft, Stethoscope, Search, Plus, Trash2, CheckCircle2, 
   ChevronDown, ChevronUp, DollarSign, Wallet2, Loader2, Edit3,
   Banknote, CreditCard, Landmark, User, ShieldCheck, HelpCircle, Save
-} from 'lucide-center'
+} from 'lucide-react'
 import { motion, AnimatePresence } from 'framer-motion'
 import Link from 'next/link'
 import { toast } from 'sonner'
