@@ -27,14 +27,12 @@ export default function OdontogramaPage() {
   async function fetchTodo() {
     setCargando(true)
     try {
-      // 1. Traer el estado maestro
       const { data: odonto } = await supabase
         .from('odontogramas')
         .select('dentadura')
         .eq('paciente_id', id)
         .maybeSingle()
       
-      // 2. Traer todos los presupuestos para consolidar tratamientos
       const { data: presIds } = await supabase.from('presupuestos').select('id').eq('paciente_id', id);
       
       if (presIds && presIds.length > 0) {
@@ -98,7 +96,7 @@ export default function OdontogramaPage() {
     <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} className="bg-white p-10 rounded-[3rem] shadow-sm border border-slate-100 text-left">
       <div className="flex justify-between items-center mb-10 text-left">
         <div className="text-left">
-          <h3 className="text-2xl font-black tracking-tight flex items-center gap-3 text-left">
+          <h3 className="text-2xl font-black tracking-tight flex items-center gap-3 text-left text-slate-800">
             <Activity size={24} className="text-blue-600"/> Odontograma Clínico Maestro
           </h3>
           <p className="text-slate-400 text-[10px] font-bold uppercase tracking-widest mt-1 text-left">Estado permanente consolidado del paciente</p>
@@ -154,7 +152,6 @@ function DienteMaestro({ id, datos, onClickCara, onDienteClick, superior = false
     realizado: i.estado === 'realizado'
   }));
 
-  // CORRECCIÓN: Tipado explícito para 'ico' para evitar error en el build de Vercel
   const colorTratamiento = (tipo: string) => {
     const item = iconosTratamientos.find((ico: any) => ico.tipo === tipo);
     return item?.realizado ? "#10b981" : "#f43f5e"; 
@@ -190,29 +187,29 @@ function DienteMaestro({ id, datos, onClickCara, onDienteClick, superior = false
         <svg viewBox="0 0 100 120" className={`w-full h-full ${!superior ? 'rotate-180' : ''}`}>
            <path d={getDientePath()} fill="white" stroke={iconosTratamientos.length > 0 ? "#3b82f6" : "#cbd5e1"} strokeWidth="4"/>
            
-           {iconosTratamientos.some(i => i.tipo === 'endodoncia') && (
+           {iconosTratamientos.some((i: any) => i.tipo === 'endodoncia') && (
              <path d="M50,25 L50,90" stroke={colorTratamiento('endodoncia')} strokeWidth="10" strokeLinecap="round" opacity="0.8" />
            )}
 
-           {iconosTratamientos.some(i => i.tipo === 'implante') && (
+           {iconosTratamientos.some((i: any) => i.tipo === 'implante') && (
              <g fill={colorTratamiento('implante')}>
                <rect x="40" y="75" width="20" height="35" rx="2" />
                <path d="M40,85 L60,85 M40,95 L60,95" stroke="white" strokeWidth="2" />
              </g>
            )}
 
-           {iconosTratamientos.some(i => i.tipo === 'corona') && (
+           {iconosTratamientos.some((i: any) => i.tipo === 'corona') && (
              <circle cx="50" cy="35" r="42" fill="none" stroke={colorTratamiento('corona')} strokeWidth="4" strokeDasharray="6 3" />
            )}
 
-           {iconosTratamientos.some(i => i.tipo === 'perno') && (
+           {iconosTratamientos.some((i: any) => i.tipo === 'perno') && (
              <g stroke={colorTratamiento('perno')} strokeWidth="6" strokeLinecap="round">
                <line x1="50" y1="35" x2="50" y2="60" />
                <line x1="35" y1="35" x2="65" y2="35" />
              </g>
            )}
 
-           {iconosTratamientos.some(i => i.tipo === 'sellante') && (
+           {iconosTratamientos.some((i: any) => i.tipo === 'sellante') && (
              <text x="50" y="55" textAnchor="middle" fontSize="35" fontWeight="900" fill={colorTratamiento('sellante')} style={{ userSelect: 'none' }}>S</text>
            )}
 
