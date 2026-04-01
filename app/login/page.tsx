@@ -2,7 +2,7 @@
 import { useState } from 'react'
 import { supabase } from '@/lib/supabase'
 import { LogIn, Loader2, ShieldCheck, UserCircle, Lock } from 'lucide-react'
-import { motion } from 'framer-motion'
+import { motion, AnimatePresence } from 'framer-motion'
 
 export default function LoginPage() {
   const [username, setUsername] = useState('')
