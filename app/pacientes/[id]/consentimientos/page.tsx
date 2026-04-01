@@ -39,7 +39,7 @@ export default function ConsentimientosPacientePage() {
     try {
       const [emitidos, tipos, pres, pros] = await Promise.all([
         supabase
-          .from('paciente_consentimientos') // <--- CAMBIO A TABLA EXTERNA
+          .from('paciente_consentimientos')
           .select('*')
           .eq('paciente_id', pacienteId)
           .order('fecha_creacion', { ascending: false }),
@@ -65,10 +65,12 @@ export default function ConsentimientosPacientePage() {
     setCreando(true)
     try {
       const tipo = tiposConsentimientos.find(t => t.id === form.tipo_id)
-      const especialista = profesionales.find(p => p.user_id === form.especialista_id)
+      const especialista = profesionales.find(p => p.user_id === form.especialista_id) as any;
+      
+      if (!tipo || !especialista) throw new Error("Información de referencia no encontrada")
       
       const { error } = await supabase
-        .from('paciente_consentimientos') // <--- CAMBIO A TABLA EXTERNA
+        .from('paciente_consentimientos')
         .insert([{
           paciente_id: pacienteId,
           especialista_id: form.especialista_id,
@@ -94,26 +96,32 @@ export default function ConsentimientosPacientePage() {
   }
 
   const eliminarDocumento = async (id: string) => {
-    if (!confirm("¿Eliminar permanentemente este registro legal?")) return
-    const { error } = await supabase.from('paciente_consentimientos').delete().eq('id', id)
-    if (!error) {
-      toast.success("Eliminado")
-      fetchData()
+    if (typeof window !== 'undefined' && window.confirm("¿Eliminar permanentemente este registro legal?")) {
+      const { error } = await supabase.from('paciente_consentimientos').delete().eq('id', id)
+      if (!error) {
+        toast.success("Eliminado")
+        fetchData()
+      }
     }
   }
 
-  if (cargando) return <div className="h-screen flex items-center justify-center bg-slate-50"><Loader2 className="animate-spin text-blue-600" size={40} /></div>
+  if (cargando) return (
+    <div className="h-screen flex flex-col items-center justify-center bg-slate-50 gap-4">
+      <Loader2 className="animate-spin text-blue-600" size={40} />
+      <p className="text-[10px] font-black uppercase tracking-widest text-slate-400">Verificando Archivo Legal...</p>
+    </div>
+  )
 
   return (
-    <main className="p-8 max-w-7xl mx-auto space-y-8 font-sans pb-20">
-      <header className="bg-white p-8 rounded-[3rem] shadow-sm border border-slate-100 flex flex-col md:flex-row justify-between items-center gap-4">
-        <div className="flex items-center gap-6">
+    <main className="p-8 max-w-7xl mx-auto space-y-8 font-sans pb-20 text-left">
+      <header className="bg-white p-8 rounded-[3rem] shadow-sm border border-slate-100 flex flex-col md:flex-row justify-between items-center gap-4 text-left">
+        <div className="flex items-center gap-6 text-left">
           <div className="bg-slate-900 p-5 rounded-[2rem] text-white shadow-xl shadow-slate-200">
             <FileSignature size={32} />
           </div>
-          <div>
-            <h1 className="text-2xl font-black text-slate-800 uppercase italic leading-none">Consentimientos</h1>
-            <p className="text-slate-400 text-[10px] font-bold uppercase tracking-widest mt-2">Archivo Legal del Paciente</p>
+          <div className="text-left">
+            <h1 className="text-2xl font-black text-slate-800 uppercase italic leading-none text-left">Consentimientos</h1>
+            <p className="text-slate-400 text-[10px] font-bold uppercase tracking-widest mt-2 text-left">Archivo Legal del Paciente</p>
           </div>
         </div>
         <button onClick={() => setModalAbierto(true)} className="bg-blue-600 text-white px-10 py-5 rounded-[2rem] font-black text-xs uppercase shadow-xl hover:bg-slate-900 transition-all flex items-center gap-3">
@@ -121,11 +129,11 @@ export default function ConsentimientosPacientePage() {
         </button>
       </header>
 
-      <div className="bg-white rounded-[3.5rem] shadow-xl shadow-slate-200/50 border border-slate-100 overflow-hidden">
+      <div className="bg-white rounded-[3.5rem] shadow-xl shadow-slate-200/50 border border-slate-100 overflow-hidden text-left">
         <table className="w-full text-left border-separate border-spacing-0">
           <thead>
             <tr className="bg-slate-900 text-white">
-              <th className="px-10 py-6 text-[10px] font-black uppercase tracking-widest">Documento Legal</th>
+              <th className="px-10 py-6 text-[10px] font-black uppercase tracking-widest text-left">Documento Legal</th>
               <th className="px-6 py-6 text-[10px] font-black uppercase tracking-widest text-center">Profesional</th>
               <th className="px-6 py-6 text-[10px] font-black uppercase tracking-widest text-center">Firma P.</th>
               <th className="px-10 py-6 text-[10px] font-black uppercase tracking-widest text-right">Acciones</th>
@@ -136,20 +144,22 @@ export default function ConsentimientosPacientePage() {
               <tr><td colSpan={4} className="py-20 text-center text-slate-300 font-black uppercase italic text-xs tracking-widest">No hay registros legales</td></tr>
             ) : (
               consentimientosEmitidos.map((doc) => (
-                <tr key={doc.id} className="hover:bg-blue-50/30 transition-all group">
-                  <td className="px-10 py-7">
-                    <div className="flex items-center gap-4">
-                      <div className="w-12 h-12 bg-blue-50 rounded-2xl flex items-center justify-center text-blue-600 shadow-sm group-hover:bg-blue-600 group-hover:text-white transition-all">
+                <tr key={doc.id} className="hover:bg-blue-50/30 transition-all group text-left">
+                  <td className="px-10 py-7 text-left">
+                    <div className="flex items-center gap-4 text-left">
+                      <div className="w-12 h-12 bg-blue-50 rounded-2xl flex items-center justify-center text-blue-600 shadow-sm group-hover:bg-blue-600 group-hover:text-white transition-all shrink-0">
                         <FileCheck size={24} />
                       </div>
-                      <div>
-                        <p className="text-sm font-black text-slate-800 uppercase italic leading-none">{doc.nombre_consentimiento}</p>
-                        <p className="text-[9px] text-slate-400 font-bold uppercase mt-1.5 tracking-widest">Creado: {new Date(doc.fecha_creacion).toLocaleDateString('es-CL')}</p>
+                      <div className="text-left">
+                        <p className="text-sm font-black text-slate-800 uppercase italic leading-none text-left">{doc.nombre_consentimiento}</p>
+                        <p className="text-[9px] text-slate-400 font-bold uppercase mt-1.5 tracking-widest text-left">
+                          Creado: {doc.fecha_creacion ? new Date(doc.fecha_creacion).toLocaleDateString('es-CL') : 'S/F'}
+                        </p>
                       </div>
                     </div>
                   </td>
                   <td className="px-6 py-6 text-center">
-                    <span className="text-[10px] font-black text-slate-600 uppercase bg-slate-100 px-4 py-2 rounded-xl border border-slate-200">{doc.creado_por}</span>
+                    <span className="text-[10px] font-black text-slate-600 uppercase bg-slate-100 px-4 py-2 rounded-xl border border-slate-200">{doc.creado_por || 'Especialista'}</span>
                   </td>
                   <td className="px-6 py-6 text-center">
                     <div className="flex justify-center items-center gap-2">
@@ -159,7 +169,7 @@ export default function ConsentimientosPacientePage() {
                     </div>
                   </td>
                   <td className="px-10 py-6 text-right">
-                    <div className="flex justify-end gap-2">
+                    <div className="flex justify-end gap-2 text-right">
                         {(isAdmin || (currentUser && currentUser.id === doc.especialista_id)) && (
                           <button onClick={() => eliminarDocumento(doc.id)} className="w-12 h-12 flex items-center justify-center bg-red-50 text-red-400 hover:bg-red-500 hover:text-white rounded-2xl transition-all"><Trash2 size={18} /></button>
                         )}
@@ -178,32 +188,32 @@ export default function ConsentimientosPacientePage() {
       <AnimatePresence>
         {modalAbierto && (
           <div className="fixed inset-0 bg-slate-900/40 backdrop-blur-md z-[1000] flex items-center justify-center p-4">
-            <motion.div initial={{ scale: 0.9, opacity: 0 }} animate={{ scale: 1, opacity: 1 }} exit={{ scale: 0.9, opacity: 0 }} className="bg-white w-full max-w-md rounded-[3.5rem] p-10 shadow-2xl relative border border-white">
+            <motion.div initial={{ scale: 0.9, opacity: 0 }} animate={{ scale: 1, opacity: 1 }} exit={{ scale: 0.9, opacity: 0 }} className="bg-white w-full max-w-md rounded-[3.5rem] p-10 shadow-2xl relative border border-white text-left">
               <button onClick={() => setModalAbierto(false)} className="absolute top-8 right-8 w-10 h-10 flex items-center justify-center bg-slate-50 text-slate-300 hover:text-red-500 rounded-full transition-colors"><X size={24}/></button>
               <h2 className="text-3xl font-black text-slate-900 uppercase italic mb-8 leading-none tracking-tighter text-center">Generar<br/>Consentimiento</h2>
-              <div className="space-y-6">
-                <div className="space-y-2">
-                  <label className="text-[9px] font-black text-slate-400 uppercase tracking-widest ml-4">Tipo de Consentimiento</label>
-                  <select className="w-full p-5 bg-slate-50 rounded-[1.5rem] font-bold text-xs uppercase outline-none focus:ring-4 ring-blue-500/5 transition-all shadow-inner border-none" value={form.tipo_id} onChange={(e) => setForm({...form, tipo_id: e.target.value})}>
+              <div className="space-y-6 text-left">
+                <div className="space-y-2 text-left">
+                  <label className="text-[9px] font-black text-slate-400 uppercase tracking-widest ml-4 text-left">Tipo de Consentimiento</label>
+                  <select className="w-full p-5 bg-slate-50 rounded-[1.5rem] font-bold text-xs uppercase outline-none focus:ring-4 ring-blue-500/5 transition-all shadow-inner border-none text-slate-900 appearance-none cursor-pointer" value={form.tipo_id} onChange={(e) => setForm({...form, tipo_id: e.target.value})}>
                     <option value="">Seleccione plantilla...</option>
                     {tiposConsentimientos.map(t => <option key={t.id} value={t.id}>{t.nombre}</option>)}
                   </select>
                 </div>
-                <div className="space-y-2">
-                  <label className="text-[9px] font-black text-slate-400 uppercase tracking-widest ml-4">Vincular a Plan de Tratamiento</label>
-                  <select className="w-full p-5 bg-slate-50 rounded-[1.5rem] font-bold text-xs uppercase outline-none focus:ring-4 ring-blue-500/5 transition-all shadow-inner border-none" value={form.presupuesto_id} onChange={(e) => setForm({...form, presupuesto_id: e.target.value})}>
+                <div className="space-y-2 text-left">
+                  <label className="text-[9px] font-black text-slate-400 uppercase tracking-widest ml-4 text-left">Vincular a Plan de Tratamiento</label>
+                  <select className="w-full p-5 bg-slate-50 rounded-[1.5rem] font-bold text-xs uppercase outline-none focus:ring-4 ring-blue-500/5 transition-all shadow-inner border-none text-slate-900 appearance-none cursor-pointer" value={form.presupuesto_id} onChange={(e) => setForm({...form, presupuesto_id: e.target.value})}>
                     <option value="">Opcional: Seleccione presupuesto...</option>
                     {presupuestos.map(p => <option key={p.id} value={p.id}>{p.nombre_tratamiento || 'Sin nombre'}</option>)}
                   </select>
                 </div>
-                <div className="space-y-2">
-                  <label className="text-[9px] font-black text-slate-400 uppercase tracking-widest ml-4">Especialista a Cargo</label>
-                  <select className="w-full p-5 bg-slate-50 rounded-[1.5rem] font-bold text-xs uppercase outline-none focus:ring-4 ring-blue-500/5 transition-all shadow-inner border-none" value={form.especialista_id} onChange={(e) => setForm({...form, especialista_id: e.target.value})}>
+                <div className="space-y-2 text-left">
+                  <label className="text-[9px] font-black text-slate-400 uppercase tracking-widest ml-4 text-left">Especialista a Cargo</label>
+                  <select className="w-full p-5 bg-slate-50 rounded-[1.5rem] font-bold text-xs uppercase outline-none focus:ring-4 ring-blue-500/5 transition-all shadow-inner border-none text-slate-900 appearance-none cursor-pointer" value={form.especialista_id} onChange={(e) => setForm({...form, especialista_id: e.target.value})}>
                     <option value="">Seleccione doctor...</option>
                     {profesionales.map(p => <option key={p.user_id} value={p.user_id}>Dr. {p.nombre} {p.apellido}</option>)}
                   </select>
                 </div>
-                <button onClick={handleCrearConsentimiento} disabled={creando || !form.tipo_id || !form.especialista_id} className="w-full bg-slate-900 text-white py-6 rounded-[2rem] font-black text-[11px] uppercase shadow-2xl hover:bg-blue-600 transition-all flex items-center justify-center gap-3">
+                <button onClick={handleCrearConsentimiento} disabled={creando || !form.tipo_id || !form.especialista_id} className="w-full bg-slate-900 text-white py-6 rounded-[2rem] font-black text-[11px] uppercase shadow-2xl hover:bg-blue-600 transition-all flex items-center justify-center gap-3 disabled:bg-slate-200">
                   {creando ? <Loader2 className="animate-spin" size={18}/> : <FileSignature size={18} />} Crear Documento Legal
                 </button>
               </div>
