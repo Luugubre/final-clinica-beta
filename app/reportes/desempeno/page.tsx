@@ -242,7 +242,8 @@ export default function PanelDesempenoPage() {
                       cx="50%" cy="45%"
                       innerRadius={80} outerRadius={120}
                       paddingAngle={5} dataKey="value"
-                      label={({ name, percent }) => `${name} ${(percent * 100).toFixed(0)}%`}
+                      // CORRECCIÓN: Manejo de undefined para 'percent'
+                      label={({ name, percent }) => `${name} ${((percent || 0) * 100).toFixed(0)}%`}
                     >
                       {data.charts.pieConvenio.map((entry: any, index: number) => (
                         <Cell key={`cell-pie-${index}`} fill={COLORS[index % COLORS.length]} />
