@@ -82,7 +82,8 @@ export async function eliminarCuentaProfesional(userId: string) {
   }
 }
 
-// --- ALIAS PARA COMPATIBILIDAD (Esto evita el error de Vercel) ---
+// --- ALIAS DE COMPATIBILIDAD ---
+// Esto permite que el archivo page.tsx que usa "Staff" funcione correctamente
 export const crearCuentaStaff = crearCuentaProfesional;
 export const actualizarCuentaStaff = actualizarCuentaProfesional;
 export const eliminarCuentaStaff = eliminarCuentaProfesional;
