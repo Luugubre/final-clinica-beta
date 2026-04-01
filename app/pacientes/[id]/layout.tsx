@@ -21,7 +21,6 @@ export default function PacienteLayout({ children }: { children: React.ReactNode
 
   const presupuestoId = pathname.match(/\/tratamientos\/([a-f0-9-]{36})/)?.[1] || null;
 
-  // Función para calcular edad
   const calcularEdad = (fechaNac: string) => {
     if (!fechaNac) return 'N/A';
     const hoy = new Date();
@@ -96,12 +95,12 @@ export default function PacienteLayout({ children }: { children: React.ReactNode
 
   return (
     <div className="min-h-screen bg-[#FDFDFD] flex flex-col font-sans selection:bg-blue-100">
-      {/* HEADER DE ALTO IMPACTO */}
-      <header className="bg-white/80 backdrop-blur-xl border-b border-slate-100 sticky top-0 z-[100] px-8 py-5 print:hidden">
-        <div className="max-w-7xl mx-auto flex justify-between items-center w-full">
+      {/* HEADER: Cambiado max-w-7xl a max-w-[95%] para usar más ancho */}
+      <header className="bg-white/80 backdrop-blur-xl border-b border-slate-100 sticky top-0 z-[100] px-6 py-5 print:hidden">
+        <div className="max-w-[95%] mx-auto flex justify-between items-center w-full text-left">
           <div className="flex items-center gap-6">
             <div className="relative group">
-              <div className="bg-gradient-to-br from-blue-600 to-indigo-700 p-4 rounded-[2rem] text-white shadow-2xl shadow-blue-200 group-hover:scale-105 transition-transform">
+              <div className="bg-gradient-to-br from-blue-600 to-indigo-700 p-4 rounded-[2rem] text-white shadow-2xl shadow-blue-200">
                 <User size={28} strokeWidth={2.5} />
               </div>
               <div className="absolute -bottom-1 -right-1 w-5 h-5 bg-emerald-500 border-4 border-white rounded-full"></div>
@@ -112,7 +111,6 @@ export default function PacienteLayout({ children }: { children: React.ReactNode
               </div>
               <h1 className="text-2xl font-black text-slate-900 uppercase tracking-tighter leading-none">{paciente.nombre} {paciente.apellido}</h1>
               
-              {/* NUEVA BARRA DE DATOS DEBAJO DEL NOMBRE */}
               <div className="flex items-center gap-4 mt-2">
                 <div className="flex items-center gap-1.5">
                   <Fingerprint size={12} className="text-slate-300" />
@@ -136,24 +134,26 @@ export default function PacienteLayout({ children }: { children: React.ReactNode
             <nav className="bg-slate-100/80 p-1.5 rounded-[1.8rem] flex border border-slate-200 shadow-inner">
               <TabLink href={`/pacientes/${id}`} active={esFicha} icon={<ClipboardList size={16}/>} label="Ficha" />
               <TabLink href={`/pacientes/${id}/datos`} active={pathname.includes('/datos')} icon={<UserCircle size={16}/>} label="Perfil" />
-              <TabLink href={`/pacientes/${id}/tratamientos`} active={pathname.includes('/tratamientos')} icon={<Wallet size={16}/>} label="Finanzas" />
+              <TabLink href={`/pacientes/${id}/tratamientos`} active={pathname.includes('/tratamientos')} icon={<Wallet size={16}/>} label="Tratamientos" />
               <TabLink href={`/pacientes/${id}/odontograma`} active={pathname.includes('/odontograma')} icon={<Activity size={16}/>} label="Odonto" />
               <TabLink href={`/pacientes/${id}/archivos`} active={pathname.includes('/archivos')} icon={<Camera size={16}/>} label="Galería" />
             </nav>
-            <Link href="/agenda" className="p-3.5 bg-white border border-slate-200 text-slate-400 rounded-2xl hover:text-blue-600 hover:border-blue-200 hover:shadow-lg transition-all">
+            <Link href="/agenda" className="p-3.5 bg-white border border-slate-200 text-slate-400 rounded-2xl hover:text-blue-600 transition-all">
               <ArrowLeft size={20} strokeWidth={2.5}/>
             </Link>
           </div>
         </div>
       </header>
 
-      {/* RESTO DEL COMPONENTE IGUAL... */}
-      <div className="p-8 max-w-7xl mx-auto w-full grid grid-cols-1 lg:grid-cols-4 gap-8 flex-1 print:p-0 print:block">
-        <aside className="lg:col-span-1 space-y-6 print:hidden">
+      {/* CUERPO PRINCIPAL: Cambiado grid-cols-4 y gap a uno más fluido */}
+      <div className="px-6 py-8 max-w-[95%] mx-auto w-full grid grid-cols-1 lg:grid-cols-12 gap-8 flex-1 print:p-0 print:block">
+        
+        {/* ASIDE (Ocupa 3 de 12 columnas) */}
+        <aside className="lg:col-span-3 space-y-6 print:hidden text-left">
           <div className="bg-white p-6 rounded-[2.5rem] shadow-sm border border-slate-100 relative overflow-hidden group">
-             <div className="absolute top-0 right-0 p-4 opacity-5 group-hover:scale-110 transition-transform"><Tag size={60} /></div>
+             <div className="absolute top-0 right-0 p-4 opacity-5"><Tag size={60} /></div>
              <div className="flex items-center gap-4 relative z-10">
-                <div className="p-3 bg-purple-50 text-purple-600 rounded-2xl border border-purple-100 shadow-sm"><Tag size={20}/></div>
+                <div className="p-3 bg-purple-50 text-purple-600 rounded-2xl border border-purple-100"><Tag size={20}/></div>
                 <div>
                     <p className="text-[9px] font-black text-slate-400 uppercase tracking-widest">Previsión / Convenio</p>
                     <p className="text-xs font-black text-slate-800 uppercase mt-1">
@@ -162,7 +162,8 @@ export default function PacienteLayout({ children }: { children: React.ReactNode
                 </div>
              </div>
           </div>
-          <div className="bg-white p-8 rounded-[2.5rem] shadow-sm border border-slate-100 relative">
+
+          <div className="bg-white p-8 rounded-[2.5rem] shadow-sm border border-slate-100">
             <h4 className="font-black text-[10px] uppercase text-slate-400 mb-6 flex items-center justify-between">
               <span>Agenda Próxima</span>
               <Calendar size={14} className="text-blue-500"/>
@@ -175,7 +176,6 @@ export default function PacienteLayout({ children }: { children: React.ReactNode
                 </div>
               )) : (
                 <div className="text-center py-6">
-                  <div className="bg-slate-50 w-10 h-10 rounded-full flex items-center justify-center mx-auto mb-3"><Calendar className="text-slate-200" size={18}/></div>
                   <p className="text-[10px] text-slate-300 font-black uppercase italic">Sin citas pendientes</p>
                 </div>
               )}
@@ -183,9 +183,10 @@ export default function PacienteLayout({ children }: { children: React.ReactNode
           </div>
         </aside>
 
-        <div className="lg:col-span-3 flex flex-col gap-6 print:block print:w-full">
+        {/* CONTENIDO (Ocupa 9 de 12 columnas para estar más a la izquierda) */}
+        <div className="lg:col-span-9 flex flex-col gap-6 print:block print:w-full text-left">
           {esFicha && (
-            <nav className="bg-white/70 backdrop-blur-md p-1.5 rounded-2xl border border-slate-200 flex items-center gap-1 overflow-x-auto no-scrollbar shadow-sm sticky top-[100px] z-50 print:hidden transition-all hover:shadow-md">
+            <nav className="bg-white/70 backdrop-blur-md p-1.5 rounded-2xl border border-slate-200 flex items-center gap-1 overflow-x-auto no-scrollbar shadow-sm sticky top-[100px] z-50 print:hidden">
               <SubTabLink href={`/pacientes/${id}`} active={pathname === `/pacientes/${id}`} label="Resumen" icon={<History size={14}/>} />
               <SubTabLink href={`/pacientes/${id}/evoluciones`} active={pathname.includes('/evoluciones')} label="Evoluciones" icon={<Activity size={14}/>} />
               <SubTabLink href={`/pacientes/${id}/antecedentes`} active={pathname.includes('/antecedentes')} label="Ant. Médicos" icon={<AlertCircle size={14}/>} />
@@ -195,7 +196,8 @@ export default function PacienteLayout({ children }: { children: React.ReactNode
               <SubTabLink href={`/pacientes/${id}/consentimientos`} active={pathname.includes('/consentimientos')} label="Consentimientos" icon={<ClipboardCheck size={14}/>} />
             </nav>
           )}
-          <div className="flex-1 print:block bg-white rounded-[2.8rem] shadow-sm border border-slate-100 overflow-hidden min-h-[600px]">
+          
+          <div className="flex-1 print:block bg-white rounded-[2rem] shadow-sm border border-slate-100 overflow-hidden min-h-[600px]">
             <div className="h-full w-full">
                {children}
             </div>
@@ -208,7 +210,7 @@ export default function PacienteLayout({ children }: { children: React.ReactNode
 
 function TabLink({ href, active, icon, label }: any) {
   return (
-    <Link href={href} className={`flex items-center gap-2.5 px-6 py-3 rounded-[1.4rem] font-black text-[11px] uppercase transition-all shrink-0 ${active ? 'bg-white text-blue-600 shadow-xl shadow-blue-100 border border-slate-100' : 'text-slate-400 hover:text-slate-600 hover:bg-white/50'}`}>
+    <Link href={href} className={`flex items-center gap-2.5 px-6 py-3 rounded-[1.4rem] font-black text-[11px] uppercase transition-all shrink-0 ${active ? 'bg-white text-blue-600 shadow-xl shadow-blue-100 border border-slate-100' : 'text-slate-400 hover:text-slate-600'}`}>
       {icon} <span className="tracking-tight">{label}</span>
     </Link>
   )
@@ -216,7 +218,7 @@ function TabLink({ href, active, icon, label }: any) {
 
 function SubTabLink({ href, active, label, icon }: any) {
   return (
-    <Link href={href} className={`flex items-center gap-2.5 px-5 py-2.5 rounded-xl font-black text-[10px] uppercase transition-all whitespace-nowrap ${active ? 'bg-slate-900 text-white shadow-lg shadow-slate-200' : 'text-slate-400 hover:text-slate-900 hover:bg-slate-50'}`}>
+    <Link href={href} className={`flex items-center gap-2.5 px-5 py-2.5 rounded-xl font-black text-[10px] uppercase transition-all whitespace-nowrap ${active ? 'bg-slate-900 text-white shadow-lg' : 'text-slate-400 hover:text-slate-900 hover:bg-slate-50'}`}>
       <span className={active ? 'text-blue-400' : ''}>{icon}</span> {label}
     </Link>
   )

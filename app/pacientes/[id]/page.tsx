@@ -4,9 +4,9 @@ import { useParams } from 'next/navigation'
 import { supabase } from '@/lib/supabase'
 import { 
   History, Calendar, Clock, Stethoscope, 
-  UserRoundPen, Loader2, Image as ImageIcon, 
-  FileText, DollarSign, User, CheckCircle2,
-  CalendarDays, Wallet, FileSignature, Receipt
+  Loader2, Image as ImageIcon, 
+  DollarSign, User, CheckCircle2,
+  CalendarDays, Wallet, FileSignature
 } from 'lucide-react'
 import { motion, AnimatePresence } from 'framer-motion'
 
@@ -29,7 +29,7 @@ export default function HistorialPage() {
     if (user) setCurrentUserId(user.id)
 
     try {
-      // CONSULTAS EN PARALELO DE TODAS LAS TABLAS DE ACTIVIDAD
+      // CONSULTAS EN PARALELO - CORREGIDO: documentos_pacientes es la tabla de RX
       const [
         { data: evoluciones },
         { data: presupuestos },
@@ -41,7 +41,7 @@ export default function HistorialPage() {
       ] = await Promise.all([
         supabase.from('evoluciones').select('*').eq('paciente_id', paciente_id),
         supabase.from('presupuestos').select('*').eq('paciente_id', paciente_id),
-        supabase.from('archivos_pacientes').select('*').eq('paciente_id', paciente_id),
+        supabase.from('documentos_pacientes').select('*').eq('paciente_id', paciente_id),
         supabase.from('documentos_clinicos').select('*').eq('paciente_id', paciente_id),
         supabase.from('pagos').select('*').eq('paciente_id', paciente_id),
         supabase.from('citas').select('*').eq('paciente_id', paciente_id),
@@ -64,30 +64,31 @@ export default function HistorialPage() {
         ...p,
         tipo: 'presupuesto',
         fecha: p.created_at,
-        titulo: `Plan de Tratamiento: ${p.nombre_tratamiento || 'Sin nombre'}`,
+        titulo: `Plan de Tratamiento: ${p.nombre_treatment || 'Tratamiento'}`,
         descripcion: `Monto total: $${Number(p.total).toLocaleString('es-CL')} | Estado: ${p.estado}`,
         icon: <DollarSign size={16} />,
         color: 'emerald'
       }))
 
-      // 3. NORMALIZAR ARCHIVOS / IMÁGENES
+      // 3. NORMALIZAR ARCHIVOS / IMÁGENES (RX Y DOCUMENTOS SUBIDOS)
       const arcs = (archivos || []).map(a => ({
         ...a,
         tipo: 'archivo',
         fecha: a.fecha_subida,
-        titulo: `Archivo / Radiografía: ${a.nombre_archivo}`,
-        descripcion: `Categoría: ${a.tipo_archivo || 'General'}`,
+        titulo: `RX / Archivo: ${a.titulo || a.nombre_archivo}`,
+        descripcion: a.descripcion || `Archivo de tipo ${a.tipo_archivo}`,
+        url_archivo: a.url_archivo, // Importante para la miniatura
         icon: <ImageIcon size={16} />,
         color: 'purple'
       }))
 
-      // 4. NORMALIZAR DOCUMENTOS / CONSENTIMIENTOS
+      // 4. NORMALIZAR DOCUMENTOS CLÍNICOS (CONSENTIMIENTOS GENERADOS)
       const docs = (documentos || []).map(d => ({
         ...d,
         tipo: 'documento',
         fecha: d.fecha_creacion,
         titulo: d.titulo_documento || 'Documento Clínico',
-        descripcion: `Documento generado y vinculado al historial.`,
+        descripcion: `Documento generado y firmado digitalmente.`,
         icon: <FileSignature size={16} />,
         color: 'orange'
       }))
@@ -109,7 +110,7 @@ export default function HistorialPage() {
         tipo: 'cita',
         fecha: c.inicio,
         titulo: `Cita Agendada: ${c.estado}`,
-        descripcion: `Motivo: ${c.motivo || 'Consulta'}`,
+        descripcion: `Motivo: ${c.motivo || 'Consulta General'}`,
         icon: <CalendarDays size={16} />,
         color: 'slate'
       }))
@@ -119,7 +120,7 @@ export default function HistorialPage() {
         new Date(b.fecha).getTime() - new Date(a.fecha).getTime()
       )
 
-      // MAPEAR AUTORES
+      // MAPEAR AUTORES (PROFESIONALES)
       const final = total.map(item => ({
         ...item,
         autor: profesionales?.find(p => p.user_id === (item.profesional_id || item.especialista_id || item.creado_por || item.usuario_id))
@@ -127,7 +128,7 @@ export default function HistorialPage() {
 
       setBitacora(final)
     } catch (err) {
-      console.error("Error al cargar bitacora completa")
+      console.error("Error al cargar bitacora completa:", err)
     } finally {
       setLoading(false)
     }
@@ -146,16 +147,16 @@ export default function HistorialPage() {
   )
 
   return (
-    <div className="max-w-4xl mx-auto space-y-8 p-4">
+    <div className="max-w-4xl mx-auto space-y-8 p-4 text-left">
       {/* HEADER */}
-      <div className="flex flex-col md:flex-row md:items-center justify-between gap-6 mb-12 bg-white p-8 rounded-[2.5rem] border border-slate-100 shadow-sm relative overflow-hidden">
-        <div className="flex items-center gap-4 relative z-10">
+      <div className="flex flex-col md:flex-row md:items-center justify-between gap-6 mb-12 bg-white p-8 rounded-[2.5rem] border border-slate-100 shadow-sm relative overflow-hidden text-left">
+        <div className="flex items-center gap-4 relative z-10 text-left">
           <div className="bg-slate-900 p-4 rounded-2xl text-white shadow-lg">
             <History size={24} />
           </div>
-          <div>
+          <div className="text-left">
             <h2 className="text-xl font-black text-slate-800 uppercase italic leading-none">Línea de Tiempo</h2>
-            <p className="text-slate-400 text-[9px] font-bold uppercase tracking-widest mt-1">Actividad 360° del Paciente</p>
+            <p className="text-slate-400 text-[9px] font-bold uppercase tracking-widest mt-1">Actividad completa del Paciente</p>
           </div>
         </div>
 
@@ -166,13 +167,13 @@ export default function HistorialPage() {
       </div>
 
       {/* TIMELINE */}
-      <div className="relative ml-6 border-l-2 border-slate-100 pl-10 space-y-10">
+      <div className="relative ml-6 border-l-2 border-slate-100 pl-10 space-y-10 text-left">
         <AnimatePresence mode='popLayout'>
           {bitacoraFiltrada.map((item) => (
             <motion.div 
               layout key={`${item.tipo}-${item.id}`} 
               initial={{ opacity: 0, x: -20 }} animate={{ opacity: 1, x: 0 }}
-              className="relative"
+              className="relative text-left"
             >
               {/* PUNTO EN LA LÍNEA */}
               <div className={`absolute -left-[51px] top-2 w-5 h-5 bg-white border-4 rounded-full shadow-sm z-10 ${
@@ -183,9 +184,9 @@ export default function HistorialPage() {
                 item.color === 'cyan' ? 'border-cyan-500' : 'border-slate-400'
               }`}></div>
               
-              <div className="bg-white p-7 rounded-[2.5rem] shadow-sm border border-slate-100 hover:shadow-md transition-all group relative overflow-hidden">
-                <div className="flex justify-between items-start mb-5 relative z-10">
-                  <div className="flex items-center gap-4">
+              <div className="bg-white p-7 rounded-[2.5rem] shadow-sm border border-slate-100 hover:shadow-md transition-all group relative overflow-hidden text-left">
+                <div className="flex justify-between items-start mb-5 relative z-10 text-left">
+                  <div className="flex items-center gap-4 text-left">
                     <div className={`p-3 rounded-2xl shadow-sm ${
                       item.color === 'blue' ? 'bg-blue-50 text-blue-600' : 
                       item.color === 'emerald' ? 'bg-emerald-50 text-emerald-600' :
@@ -195,7 +196,7 @@ export default function HistorialPage() {
                     }`}>
                       {item.icon}
                     </div>
-                    <div>
+                    <div className="text-left">
                       <h4 className="text-xs font-black text-slate-800 uppercase tracking-tight">
                         {item.titulo}
                       </h4>
@@ -222,52 +223,56 @@ export default function HistorialPage() {
                   </div>
                 </div>
 
-                {/* CUERPO DEL CONTENIDO */}
-                <div className="bg-slate-50/50 p-5 rounded-3xl border border-slate-50 relative z-10">
-                  <p className="text-xs text-slate-600 font-medium leading-relaxed italic">
+                <div className="bg-slate-50/50 p-5 rounded-3xl border border-slate-50 relative z-10 text-left">
+                  <p className="text-xs text-slate-600 font-medium leading-relaxed italic text-left">
                     {item.descripcion}
                   </p>
                   
-                  {/* PREVIEW ESPECIAL PARA ARCHIVOS/IMÁGENES */}
+                  {/* VISUALIZACIÓN DE IMAGEN CORREGIDA */}
                   {item.tipo === 'archivo' && item.url_archivo && (
-                    <div className="mt-4 flex gap-3">
+                    <div className="mt-4 flex gap-3 text-left">
                         <div className="relative overflow-hidden rounded-2xl border-2 border-white shadow-lg w-40 h-28 group/img">
                             <img src={item.url_archivo} className="w-full h-full object-cover transition-transform duration-500 group-hover/img:scale-110" />
                             <div className="absolute inset-0 bg-black/20 opacity-0 group-hover/img:opacity-100 transition-opacity flex items-center justify-center">
                                 <ImageIcon className="text-white" size={20} />
                             </div>
                         </div>
-                        <div className="flex flex-col justify-center">
-                            <button className="text-[9px] font-black text-blue-600 uppercase hover:underline">Ver pantalla completa</button>
-                            <button className="text-[9px] font-black text-slate-400 uppercase mt-2 hover:text-slate-600">Descargar original</button>
+                        <div className="flex flex-col justify-center text-left">
+                            <a href={item.url_archivo} target="_blank" className="text-[9px] font-black text-blue-600 uppercase hover:underline">Ver pantalla completa</a>
+                            <a href={item.url_archivo} download className="text-[9px] font-black text-slate-400 uppercase mt-2 hover:text-slate-600">Descargar original</a>
                         </div>
                     </div>
                   )}
 
-                  {/* INDICADOR DE PAGO SI ES UN PAGO */}
                   {item.tipo === 'pago' && (
-                    <div className="mt-3 flex items-center gap-2">
+                    <div className="mt-3 flex items-center gap-2 text-left">
                         <CheckCircle2 size={12} className="text-emerald-500" />
-                        <span className="text-[9px] font-black text-emerald-600 uppercase">Transacción validada por caja</span>
+                        <span className="text-[9px] font-black text-emerald-600 uppercase">Transacción validada</span>
                     </div>
                   )}
                 </div>
 
-                {/* DECORACIÓN DE FONDO SEGÚN TIPO */}
                 <div className="absolute -bottom-6 -right-6 opacity-[0.03] rotate-12 group-hover:rotate-0 transition-transform duration-700 pointer-events-none">
                     {item.icon}
                 </div>
               </div>
             </motion.div>
           ))}
+          
           {bitacoraFiltrada.length === 0 && (
             <div className="py-20 text-center flex flex-col items-center gap-4 bg-white rounded-[3rem] border-2 border-dashed border-slate-100">
                 <History className="text-slate-200" size={48} />
-                <p className="text-slate-400 font-black uppercase text-xs italic tracking-widest">No hay registros en esta categoría</p>
+                <p className="text-slate-400 font-black uppercase text-xs italic tracking-widest">No hay registros de actividad todavía</p>
             </div>
           )}
         </AnimatePresence>
       </div>
+
+      <style jsx global>{`
+        .custom-scrollbar::-webkit-scrollbar { width: 4px; }
+        .custom-scrollbar::-webkit-scrollbar-track { background: transparent; }
+        .custom-scrollbar::-webkit-scrollbar-thumb { background: #cbd5e1; border-radius: 10px; }
+      `}</style>
     </div>
   )
 }

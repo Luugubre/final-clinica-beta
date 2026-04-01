@@ -222,6 +222,7 @@ export default function EvolucionesPage() {
                     className="w-full p-6 bg-slate-50 rounded-[2rem] font-medium text-slate-700 outline-none focus:ring-2 ring-blue-500/20 shadow-inner transition-all leading-relaxed" 
                     value={nuevaEv.descripcion_procedimiento} 
                     onChange={(e) => setNuevaEv({...nuevaEv, descripcion_procedimiento: e.target.value})} 
+                    placeholder="Detalle el procedimiento..."
                   />
                 </div>
 
@@ -229,9 +230,10 @@ export default function EvolucionesPage() {
                   <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest block mb-3 ml-2">Notas Internas</label>
                   <input 
                     type="text" 
-                    className="w-full p-5 bg-slate-50 rounded-2xl font-medium outline-none border-none focus:ring-2 ring-blue-500/20 shadow-inner" 
+                    className="w-full p-5 bg-slate-50 rounded-2xl font-medium text-slate-700 outline-none border-none focus:ring-2 ring-blue-500/20 shadow-inner" 
                     value={nuevaEv.observaciones} 
                     onChange={(e) => setNuevaEv({...nuevaEv, observaciones: e.target.value})} 
+                    placeholder="Escriba notas privadas..."
                   />
                 </div>
 

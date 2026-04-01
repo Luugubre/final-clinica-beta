@@ -5,9 +5,10 @@ import { supabase } from '@/lib/supabase'
 import { 
   FileText, Upload, Trash2, Loader2, 
   X, Save, Calendar, FileType, Maximize2,
-  ZoomIn, ZoomOut, RefreshCcw, Move
+  ZoomIn, ZoomOut, RefreshCcw
 } from 'lucide-react'
 import { motion, AnimatePresence } from 'framer-motion'
+import { toast } from 'sonner' // O la librería de alertas que uses
 
 export default function DocumentosPage() {
   const { id: paciente_id } = useParams()
@@ -39,9 +40,16 @@ export default function DocumentosPage() {
     const file = e.target.files?.[0]
     if (!file) return
     setSubiendo(true)
+    
     try {
+      // 1. OBTENER EL USUARIO ACTUAL (Para el historial)
+      const { data: { user } } = await supabase.auth.getUser()
+      if (!user) throw new Error("No se detectó una sesión activa")
+
       const fileExt = file.name.split('.').pop()
       const fileName = `${Date.now()}.${fileExt}`
+      
+      // 2. SUBIDA AL STORAGE
       const { error: storageError } = await supabase.storage
         .from('pacientes_docs')
         .upload(fileName, file)
@@ -49,19 +57,25 @@ export default function DocumentosPage() {
 
       const { data: { publicUrl } } = supabase.storage.from('pacientes_docs').getPublicUrl(fileName)
 
+      // 3. INSERCIÓN EN TABLA (Con profesional_id para el historial)
       const { data, error } = await supabase.from('documentos_pacientes').insert([{
         paciente_id,
         nombre_archivo: file.name,
         url_archivo: publicUrl,
         tipo_archivo: file.type,
-        titulo: file.name
+        titulo: file.name,
+        profesional_id: user.id // <-- CAMPO CLAVE PARA EL HISTORIAL
       }]).select().single()
+
+      if (error) throw error
 
       if (data) {
         setDocumentos([data, ...documentos])
         abrirVisor(data)
+        toast.success("Documento sincronizado con el historial")
       }
     } catch (error: any) {
+      console.error(error)
       alert("Error: " + error.message)
     } finally {
       setSubiendo(false)
@@ -75,7 +89,6 @@ export default function DocumentosPage() {
     setVisorAbierto(true)
   }
 
-  // FUNCIONES DE CONTROL DE ZOOM
   const aumentarZoom = () => setZoom(prev => Math.min(prev + 0.5, 4))
   const disminuirZoom = () => setZoom(prev => Math.max(prev - 0.5, 1))
   const resetearZoom = () => setZoom(1)
@@ -89,7 +102,7 @@ export default function DocumentosPage() {
     if (!error) {
       await fetchDocumentos()
       setVisorAbierto(false)
-      alert("Información actualizada con éxito")
+      toast.success("Información actualizada")
     }
   }
 
@@ -99,6 +112,7 @@ export default function DocumentosPage() {
     if (!error) {
       setDocumentos(documentos.filter(d => d.id !== seleccionado.id))
       setVisorAbierto(false)
+      toast.error("Archivo eliminado")
     }
   }
 
@@ -110,24 +124,25 @@ export default function DocumentosPage() {
   )
 
   return (
-    <div className="max-w-7xl mx-auto p-6 pb-20">
+    <div className="max-w-7xl mx-auto p-6 pb-20 text-left">
       {/* HEADER */}
-      <div className="bg-white p-10 rounded-[3.5rem] shadow-sm border border-slate-100 flex justify-between items-center mb-10">
-        <div>
+      <div className="bg-white p-10 rounded-[3.5rem] shadow-sm border border-slate-100 flex justify-between items-center mb-10 text-left">
+        <div className="text-left">
           <h3 className="text-3xl font-black text-slate-800 uppercase italic leading-none">RX y Documentos</h3>
           <p className="text-slate-400 text-[10px] font-bold uppercase tracking-[0.3em] mt-2">Expediente digital del paciente</p>
         </div>
         <label className="bg-blue-600 text-white px-8 py-4 rounded-2xl font-black text-xs uppercase cursor-pointer hover:bg-slate-900 shadow-xl transition-all flex items-center gap-2 active:scale-95">
-          <Upload size={18}/> {subiendo ? 'Subiendo...' : 'Subir Documento'}
+          {subiendo ? <Loader2 size={18} className="animate-spin" /> : <Upload size={18}/>} 
+          {subiendo ? 'Subiendo...' : 'Subir Documento'}
           <input type="file" className="hidden" onChange={handleUpload} disabled={subiendo} />
         </label>
       </div>
 
       {/* GRILLA DE MINIATURAS */}
-      <div className="grid grid-cols-2 md:grid-cols-4 lg:grid-cols-5 gap-6">
+      <div className="grid grid-cols-2 md:grid-cols-4 lg:grid-cols-5 gap-6 text-left">
         {documentos.length === 0 ? (
           <div className="col-span-full py-24 text-center bg-slate-50 rounded-[3rem] border-2 border-dashed border-slate-200">
-             <p className="text-[10px] font-black uppercase text-slate-300 tracking-widest">Sin registros digitalizados</p>
+             <p className="text-[10px] font-black uppercase text-slate-300 tracking-widest italic">Sin registros digitalizados</p>
           </div>
         ) : (
           documentos.map((doc) => (
@@ -135,10 +150,10 @@ export default function DocumentosPage() {
               key={doc.id} 
               whileHover={{ y: -5 }} 
               onClick={() => abrirVisor(doc)} 
-              className="group cursor-pointer bg-white p-4 rounded-[2.5rem] border border-slate-100 shadow-sm hover:border-blue-400 transition-all"
+              className="group cursor-pointer bg-white p-4 rounded-[2.5rem] border border-slate-100 shadow-sm hover:border-blue-400 transition-all text-left"
             >
               <div className="aspect-square bg-slate-50 rounded-[2rem] mb-4 overflow-hidden flex items-center justify-center relative">
-                {doc.tipo_archivo.includes('image') ? (
+                {doc.tipo_archivo?.includes('image') ? (
                   <img src={doc.url_archivo} className="w-full h-full object-cover transition-transform group-hover:scale-110" />
                 ) : (
                   <FileText className="text-slate-200" size={40} />
@@ -153,140 +168,77 @@ export default function DocumentosPage() {
         )}
       </div>
 
-      {/* VISOR MODAL 80/20 */}
+      {/* VISOR MODAL */}
       <AnimatePresence>
         {visorAbierto && (
           <motion.div 
             initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}
             className="fixed inset-0 bg-slate-950/98 backdrop-blur-3xl z-[999] flex flex-col lg:flex-row overflow-hidden"
           >
-            {/* IZQUIERDA: VISUALIZADOR (80%) */}
+            {/* IZQUIERDA: VISUALIZADOR */}
             <div className="lg:w-[80%] w-full h-full relative flex items-center justify-center p-4 lg:p-12 overflow-hidden">
-               
-               {/* BARRA DE ZOOM FLOTANTE */}
                <div className="absolute bottom-10 left-1/2 -translate-x-1/2 flex items-center gap-2 bg-slate-900/90 backdrop-blur-xl border border-white/10 p-2 rounded-3xl z-20 shadow-2xl">
                   <button onClick={disminuirZoom} className="p-3 text-white hover:bg-white/10 rounded-2xl transition-all"><ZoomOut size={20}/></button>
-                  
                   <div className="px-4 flex flex-col items-center">
                     <span className="text-[11px] font-black text-blue-400 uppercase tracking-widest">{zoom.toFixed(1)}x</span>
-                    <span className="text-[7px] text-white/40 font-bold uppercase">Zoom</span>
                   </div>
-
                   <button onClick={aumentarZoom} className="p-3 text-white hover:bg-white/10 rounded-2xl transition-all"><ZoomIn size={20}/></button>
-                  
                   <div className="w-[1px] h-6 bg-white/10 mx-2"></div>
-                  
-                  <button onClick={resetearZoom} className="p-3 text-white hover:bg-white/10 rounded-2xl transition-all" title="Resetear"><RefreshCcw size={18}/></button>
+                  <button onClick={resetearZoom} className="p-3 text-white hover:bg-white/10 rounded-2xl transition-all"><RefreshCcw size={18}/></button>
                </div>
 
-               <button 
-                onClick={() => setVisorAbierto(false)} 
-                className="absolute top-8 left-8 text-white/50 hover:text-white flex items-center gap-2 font-black text-[10px] uppercase tracking-widest transition-all z-20"
-               >
+               <button onClick={() => setVisorAbierto(false)} className="absolute top-8 left-8 text-white/50 hover:text-white flex items-center gap-2 font-black text-[10px] uppercase tracking-widest transition-all z-20">
                   <X size={20} /> Salir del Visor
                </button>
 
                <div className="w-full h-full flex items-center justify-center overflow-hidden">
-                  {seleccionado.tipo_archivo.includes('image') ? (
+                  {seleccionado?.tipo_archivo?.includes('image') ? (
                     <motion.div 
-                      // Solo permite arrastrar si el zoom es mayor a 1
                       drag={zoom > 1}
-                      dragMomentum={false} // Detiene la imagen donde sueltas el mouse
-                      dragConstraints={{ left: -1000, right: 1000, top: -1000, bottom: 1000 }}
-                      // AUTO-CENTRADO: Si el zoom es 1, x e y vuelven a 0
-                      animate={{ 
-                        scale: zoom,
-                        x: zoom === 1 ? 0 : undefined,
-                        y: zoom === 1 ? 0 : undefined 
-                      }}
-                      transition={{ type: 'tween', duration: 0.2 }} // Movimiento seco y directo
+                      dragMomentum={false}
+                      animate={{ scale: zoom, x: zoom === 1 ? 0 : undefined, y: zoom === 1 ? 0 : undefined }}
                       className={zoom > 1 ? 'cursor-grab active:cursor-grabbing' : 'cursor-default'}
                     >
-                      <img 
-                        src={seleccionado.url_archivo} 
-                        className="max-w-full max-h-[85vh] object-contain rounded-sm select-none pointer-events-none shadow-2xl shadow-black/80"
-                        draggable={false}
-                      />
+                      <img src={seleccionado.url_archivo} className="max-w-full max-h-[85vh] object-contain rounded-sm select-none pointer-events-none shadow-2xl" draggable={false} />
                     </motion.div>
                   ) : (
                     <div className="flex flex-col items-center gap-6">
                        <FileText size={120} className="text-white/10" />
-                       <a href={seleccionado.url_archivo} target="_blank" className="bg-white text-slate-900 px-10 py-5 rounded-3xl font-black text-xs uppercase shadow-2xl hover:scale-105 transition-transform">
-                         Abrir PDF en Nueva Pestaña
-                       </a>
+                       <a href={seleccionado.url_archivo} target="_blank" className="bg-white text-slate-900 px-10 py-5 rounded-3xl font-black text-xs uppercase shadow-2xl hover:scale-105 transition-transform">Abrir PDF en Nueva Pestaña</a>
                     </div>
                   )}
                </div>
             </div>
 
-            {/* DERECHA: PANEL TÉCNICO (20%) */}
-            <motion.div 
-              initial={{ x: 100 }} animate={{ x: 0 }} 
-              className="lg:w-[20%] w-full bg-white h-full p-10 flex flex-col shadow-[-20px_0_50px_rgba(0,0,0,0.4)] z-30"
-            >
-              <div className="flex-1 space-y-8 overflow-y-auto pr-2 custom-scrollbar">
-                <div className="space-y-2">
-                  <p className="text-[10px] font-black text-blue-600 uppercase tracking-widest flex items-center gap-2">
-                    <FileType size={12}/> {seleccionado.tipo_archivo.split('/')[1]}
-                  </p>
-                  <h4 className="text-xl font-black text-slate-800 leading-tight uppercase italic break-words">{seleccionado.nombre_archivo}</h4>
+            {/* DERECHA: PANEL TÉCNICO */}
+            <motion.div initial={{ x: 100 }} animate={{ x: 0 }} className="lg:w-[20%] w-full bg-white h-full p-10 flex flex-col shadow-2xl z-30 text-left">
+              <div className="flex-1 space-y-8 overflow-y-auto pr-2 text-left">
+                <div className="space-y-2 text-left">
+                  <p className="text-[10px] font-black text-blue-600 uppercase tracking-widest flex items-center gap-2"><FileType size={12}/> {seleccionado.tipo_archivo?.split('/')[1]}</p>
+                  <h4 className="text-xl font-black text-slate-800 leading-tight uppercase italic break-words text-left">{seleccionado.nombre_archivo}</h4>
                 </div>
-
-                <div className="space-y-6 pt-6 border-t border-slate-100">
-                  <div className="flex items-center gap-3 text-slate-400">
-                    <Calendar size={16} />
-                    <span className="text-[10px] font-bold uppercase tracking-widest">{new Date(seleccionado.fecha_subida).toLocaleDateString('es-CL', { day: '2-digit', month: 'long', year: 'numeric' })}</span>
-                  </div>
+                <div className="pt-6 border-t border-slate-100 text-left">
+                   <p className="text-[10px] font-bold text-slate-400 uppercase flex items-center gap-2"><Calendar size={14} /> {new Date(seleccionado.fecha_subida).toLocaleDateString()}</p>
                 </div>
-
-                <div className="space-y-6 pt-10">
-                  <div className="space-y-3">
+                <div className="space-y-6 pt-10 text-left">
+                  <div className="space-y-3 text-left">
                     <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest ml-2 italic">Título Visual</label>
-                    <input 
-                      type="text"
-                      className="w-full bg-slate-50 p-5 rounded-2xl text-xs font-bold border-2 border-transparent focus:border-blue-500/20 focus:bg-white outline-none transition-all shadow-inner"
-                      value={editando.titulo}
-                      onChange={(e) => setEditando({...editando, titulo: e.target.value})}
-                    />
+                    <input type="text" className="w-full bg-slate-50 p-5 rounded-2xl text-xs font-bold outline-none border-2 border-transparent focus:border-blue-500/20" value={editando.titulo} onChange={(e) => setEditando({...editando, titulo: e.target.value})} />
                   </div>
-
-                  <div className="space-y-3">
+                  <div className="space-y-3 text-left">
                     <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest ml-2 italic">Descripción / Hallazgos</label>
-                    <textarea 
-                      className="w-full bg-slate-50 p-5 rounded-2xl text-xs font-bold border-2 border-transparent focus:border-blue-500/20 focus:bg-white outline-none transition-all min-h-[180px] leading-relaxed shadow-inner"
-                      placeholder="Ej: Se observa caries en pieza 2.1 con compromiso pulpar..."
-                      value={editando.descripcion}
-                      onChange={(e) => setEditando({...editando, descripcion: e.target.value})}
-                    />
+                    <textarea className="w-full bg-slate-50 p-5 rounded-2xl text-xs font-bold outline-none border-2 border-transparent focus:border-blue-500/20 min-h-[180px]" value={editando.descripcion} onChange={(e) => setEditando({...editando, descripcion: e.target.value})} />
                   </div>
                 </div>
               </div>
-
-              {/* ACCIONES */}
               <div className="pt-8 space-y-3">
-                <button 
-                  onClick={guardarCambios} 
-                  className="w-full bg-blue-600 text-white py-6 rounded-3xl font-black text-xs uppercase shadow-xl shadow-blue-100 hover:bg-slate-900 transition-all flex items-center justify-center gap-3"
-                >
-                  <Save size={18}/> Guardar Cambios
-                </button>
-                <button 
-                  onClick={eliminarArchivo} 
-                  className="w-full bg-red-50 text-red-500 py-4 rounded-3xl font-black text-[10px] uppercase hover:bg-red-500 hover:text-white transition-all flex items-center justify-center gap-2"
-                >
-                  <Trash2 size={16}/> Eliminar Archivo
-                </button>
+                <button onClick={guardarCambios} className="w-full bg-blue-600 text-white py-6 rounded-3xl font-black text-xs uppercase shadow-xl hover:bg-slate-900 transition-all flex items-center justify-center gap-3"><Save size={18}/> Guardar Cambios</button>
+                <button onClick={eliminarArchivo} className="w-full bg-red-50 text-red-500 py-4 rounded-3xl font-black text-[10px] uppercase hover:bg-red-500 hover:text-white transition-all flex items-center justify-center gap-2"><Trash2 size={16}/> Eliminar Archivo</button>
               </div>
             </motion.div>
           </motion.div>
         )}
       </AnimatePresence>
-
-      <style jsx global>{`
-        .custom-scrollbar::-webkit-scrollbar { width: 4px; }
-        .custom-scrollbar::-webkit-scrollbar-track { background: transparent; }
-        .custom-scrollbar::-webkit-scrollbar-thumb { background: #cbd5e1; border-radius: 10px; }
-      `}</style>
     </div>
   )
 }

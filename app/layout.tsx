@@ -3,6 +3,7 @@ import { useEffect, useState, useRef } from 'react'
 import { usePathname, useRouter } from 'next/navigation'
 import { supabase } from '@/lib/supabase'
 import { motion, AnimatePresence } from 'framer-motion'
+import { Toaster, toast } from 'sonner' // IMPORTAR TOASTER Y TOAST
 import { 
   Activity, Search, Calendar, Users, 
   Briefcase, BarChart3, Settings, LogOut,
@@ -13,7 +14,7 @@ import {
   TrendingUp, FileSpreadsheet, PieChart, 
   ArrowRightLeft, UserMinus, Trophy,
   FileSearch, Users2, ChevronRight,
-  Receipt, HeartPulse, Loader2, User 
+  Receipt, HeartPulse, Loader2, User, UserCheck
 } from 'lucide-react'
 import Link from 'next/link'
 import './globals.css'
@@ -40,6 +41,41 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
   const adminMenuRef = useRef<HTMLDivElement>(null)
   const reportMenuRef = useRef<HTMLDivElement>(null)
 
+  // --- LÓGICA DE NOTIFICACIONES EN TIEMPO REAL ---
+  useEffect(() => {
+    // Solo activamos la escucha si el usuario está logueado y tenemos su perfil
+    if (!session?.user?.id || !perfil) return;
+
+    // El dentista se suscribe a su canal personal usando su ID de usuario
+    const canalNotificaciones = supabase
+      .channel(`dentista-${session.user.id}`)
+      .on('broadcast', { event: 'PACIENTE_LLEGO' }, (payload: any) => {
+        
+        // NOTIFICACIÓN EMERGENTE GLOBAL
+        toast.info("¡PACIENTE EN ESPERA!", {
+          description: `El paciente ${payload.payload.nombre} acaba de llegar a la clínica.`,
+          duration: 10000,
+          icon: <UserCheck className="text-blue-500" />,
+          style: {
+            background: '#020617', // Slate 950
+            color: '#fff',
+            borderRadius: '1.5rem',
+            border: '1px solid #1e293b'
+          }
+        });
+
+        // SONIDO DE ALERTA (Opcional)
+        const audio = new Audio('https://assets.mixkit.co/active_storage/sfx/2869/2869-preview.mp3');
+        audio.play().catch(() => console.log("Permiso de audio requerido por el navegador"));
+      })
+      .subscribe();
+
+    return () => {
+      supabase.removeChannel(canalNotificaciones);
+    }
+  }, [session, perfil]);
+
+  // --- MANEJO DE CLIC FUERA DE MENÚS ---
   useEffect(() => {
     const handleClickOutside = (event: MouseEvent) => {
       if (adminMenuRef.current && !adminMenuRef.current.contains(event.target as Node)) setShowAdminMenu(false)
@@ -50,6 +86,7 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
     return () => document.removeEventListener('mousedown', handleClickOutside)
   }, [])
 
+  // --- BÚSQUEDA DE PACIENTES ---
   useEffect(() => {
     const delayDebounceFn = setTimeout(() => {
       if (busqueda.length > 2) ejecutarBusqueda(busqueda)
@@ -70,6 +107,7 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
     setBuscando(false)
   }
 
+  // --- GESTIÓN DE SESIÓN ---
   useEffect(() => {
     const getUserData = async () => {
       const { data: { session: currentSession } } = await supabase.auth.getSession()
@@ -101,8 +139,11 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
 
   return (
     <html lang="es">
-      <body className="bg-slate-50 h-screen flex flex-col font-sans antialiased overflow-hidden text-slate-800">
+      <body className="bg-slate-50 h-screen flex flex-col font-sans antialiased overflow-hidden text-slate-800 text-left">
         
+        {/* COMPONENTE DE NOTIFICACIONES SONNER */}
+        <Toaster richColors position="top-right" expand={false} closeButton />
+
         {!isAuthPage && session && (
           <div className="flex flex-col shrink-0">
             {/* HEADER SUPERIOR */}
@@ -144,9 +185,9 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
                     {mostrarResultados && (
                       <motion.div initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: 10 }} className="absolute top-[115%] left-0 w-full bg-white rounded-3xl shadow-2xl border border-slate-100 p-3 z-[50] overflow-hidden">
                         {resultados.length > 0 ? (
-                          <div className="flex flex-col gap-1">
+                          <div className="flex flex-col gap-1 text-slate-900 text-left">
                             {resultados.map((p) => (
-                              <button key={p.id} onClick={() => { router.push(`/pacientes/${p.id}`); setMostrarResultados(false); setBusqueda(''); }} className="flex items-center justify-between p-3.5 rounded-2xl hover:bg-slate-50 transition-all group text-left w-full text-slate-900">
+                              <button key={p.id} onClick={() => { router.push(`/pacientes/${p.id}`); setMostrarResultados(false); setBusqueda(''); }} className="flex items-center justify-between p-3.5 rounded-2xl hover:bg-slate-50 transition-all group text-left w-full">
                                 <div className="flex items-center gap-3.5">
                                   <div className="w-9 h-9 rounded-xl bg-blue-50 text-blue-600 flex items-center justify-center border border-blue-100"><User size={16}/></div>
                                   <div>
@@ -176,7 +217,7 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
                       {perfil?.rol || 'Cargando...'}
                     </span>
                   </div>
-                  <div className="w-10 h-10 rounded-xl bg-gradient-to-br from-blue-600 to-indigo-700 flex items-center justify-center font-black text-sm border border-white/20">
+                  <div className="w-10 h-10 rounded-xl bg-gradient-to-br from-blue-600 to-indigo-700 flex items-center justify-center font-black text-sm border border-white/20 text-white">
                     {perfil?.nombre_completo?.[0] || 'U'}
                   </div>
                   <button onClick={handleSignOut} className="p-2 text-slate-500 hover:text-red-400 transition-all rounded-xl hover:bg-red-500/10"><LogOut size={20} /></button>
@@ -190,7 +231,6 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
                 <ModuleLink key={m.href} href={m.href} label={m.label} icon={m.icon} active={pathname.startsWith(m.href)} />
               ))}
 
-              {/* MENU REPORTES RESTAURADO */}
               {perfil?.rol === 'ADMIN' && (
                 <div className="relative h-full" ref={reportMenuRef}>
                   <button onClick={() => { setShowReportMenu(!showReportMenu); setShowAdminMenu(false); }} className={`flex items-center gap-2.5 px-1 h-full border-b-2 transition-all group ${showReportMenu || pathname.startsWith('/reportes') ? 'border-blue-600 text-blue-600 font-black' : 'border-transparent text-slate-400 hover:text-slate-800'}`}>
@@ -202,7 +242,7 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
                   <AnimatePresence>
                     {showReportMenu && (
                       <motion.div initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: 10 }} className="absolute top-[100%] left-0 bg-white shadow-2xl rounded-[2rem] border border-slate-100 p-5 z-[100] w-[300px] mt-1">
-                        <div className="flex flex-col gap-1.5 text-slate-900">
+                        <div className="flex flex-col gap-1.5 text-slate-900 text-left">
                           <MenuOption href="/reportes/desempeno" label="Panel de Desempeño" icon={<TrendingUp size={14}/>} onClick={() => setShowReportMenu(false)} />
                           <MenuOption href="/reportes/excel" label="Reportes Excel" icon={<FileSpreadsheet size={14}/>} onClick={() => setShowReportMenu(false)} />
                           
@@ -218,7 +258,7 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
                               {hoverGraficos && (
                                 <motion.div initial={{ opacity: 0, x: 10 }} animate={{ opacity: 1, x: 0 }} exit={{ opacity: 0, x: 10 }} className="absolute top-0 left-[105%] bg-white shadow-2xl rounded-[2rem] border border-slate-100 p-5 w-[280px] z-[120]">
                                   <h3 className="text-[9px] font-black text-blue-600 uppercase tracking-[0.2em] mb-3 pl-2 italic">Categorías Disponibles</h3>
-                                  <div className="grid gap-1 h-[350px] overflow-y-auto pr-2 custom-scrollbar text-slate-900">
+                                  <div className="grid gap-1 h-[350px] overflow-y-auto pr-2 custom-scrollbar text-slate-900 text-left">
                                     {[
                                       { href: "/reportes/graficos/resultados", label: "Resultados", icon: <BarChart3 size={12}/> },
                                       { href: "/reportes/graficos/flujos", label: "Flujos de dinero", icon: <ArrowRightLeft size={12}/> },
@@ -251,7 +291,6 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
                 </div>
               )}
 
-              {/* MENU ADMINISTRACION RESTAURADO */}
               {perfil?.rol === 'ADMIN' && (
                 <div className="relative h-full" ref={adminMenuRef}>
                   <button onClick={() => { setShowAdminMenu(!showAdminMenu); setShowReportMenu(false); }} className={`flex items-center gap-2.5 px-1 h-full border-b-2 transition-all group ${showAdminMenu || pathname.startsWith('/administracion') ? 'border-blue-600 text-blue-600 font-black' : 'border-transparent text-slate-400 hover:text-slate-800'}`}>
@@ -263,10 +302,10 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
                   <AnimatePresence>
                     {showAdminMenu && (
                       <motion.div initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: 10 }} className="absolute top-[100%] left-0 bg-white shadow-2xl rounded-[2.5rem] border border-slate-100 p-8 z-[100] w-[600px] mt-1 overflow-hidden">
-                        <div className="grid grid-cols-2 gap-10">
+                        <div className="grid grid-cols-2 gap-10 text-left">
                           <div className="space-y-4">
                             <h3 className="text-[10px] font-black text-blue-600 uppercase tracking-[0.3em] mb-4 pl-2">Panel Administrativo</h3>
-                            <div className="grid gap-1">
+                            <div className="grid gap-1 text-slate-900">
                               <MenuOption href="/administracion/convenios" label="Convenios" icon={<Building2 size={14}/>} onClick={() => setShowAdminMenu(false)} />
                               <MenuOption href="/administracion/profesionales" label="Profesionales" icon={<Users size={14}/>} onClick={() => setShowAdminMenu(false)} />
                               <MenuOption href="/administracion/especialidades" label="Especialidades" icon={<Stethoscope size={14}/>} onClick={() => setShowAdminMenu(false)} />
@@ -278,7 +317,7 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
                           </div>
                           <div className="space-y-4">
                             <h3 className="text-[10px] font-black text-slate-400 uppercase tracking-[0.3em] mb-4 pl-2">Configuración Sistema</h3>
-                            <div className="grid gap-1">
+                            <div className="grid gap-1 text-slate-900">
                               <MenuOption href="/administracion/configuracion/aranceles" label="Arancel Precios" icon={<BadgeDollarSign size={14}/>} onClick={() => setShowAdminMenu(false)} />
                               <MenuOption href="/administracion/configuracion/bancos" label="Bancos y Entidades" icon={<Library size={14}/>} onClick={() => setShowAdminMenu(false)} />
                               <MenuOption href="/administracion/configuracion/documentos" label="Docs Clínicos" icon={<FileText size={14}/>} onClick={() => setShowAdminMenu(false)} />
@@ -296,7 +335,7 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
           </div>
         )}
 
-        <main className="flex-1 overflow-y-auto bg-slate-50 relative z-0 print:overflow-visible print:h-auto print:bg-white custom-scrollbar">
+        <main className="flex-1 overflow-y-auto bg-slate-50 relative z-0 print:overflow-visible print:h-auto print:bg-white custom-scrollbar text-left">
           {children}
         </main>
       </body>
@@ -306,7 +345,7 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
 
 function MenuOption({ href, label, icon, onClick }: any) {
   return (
-    <Link href={href} onClick={onClick} className="flex items-center gap-4 p-3.5 rounded-2xl hover:bg-slate-50 transition-all group border border-transparent hover:border-slate-100 text-slate-900">
+    <Link href={href} onClick={onClick} className="flex items-center gap-4 p-3.5 rounded-2xl hover:bg-slate-50 transition-all group border border-transparent hover:border-slate-100">
       <div className="p-2.5 bg-slate-100 rounded-xl text-slate-500 group-hover:bg-blue-600 group-hover:text-white transition-all shadow-sm shrink-0">
         {icon}
       </div>

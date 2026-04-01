@@ -4,6 +4,7 @@ import { useParams } from 'next/navigation'
 import { supabase } from '@/lib/supabase'
 import { Activity, Save, Loader2, X, RotateCcw } from 'lucide-react'
 import { motion } from 'framer-motion'
+import { toast } from 'sonner'
 
 const c1 = [18, 17, 16, 15, 14, 13, 12, 11];
 const c2 = [21, 22, 23, 24, 25, 26, 27, 28];
@@ -13,7 +14,7 @@ const c4 = [31, 32, 33, 34, 35, 36, 37, 38];
 export default function OdontogramaPage() {
   const { id } = useParams()
   const [dentadura, setDentadura] = useState<Record<number, any>>({})
-  const [itemsGlobales, setItemsGlobales] = useState<any[]>([]) // Para mostrar iconos de todos los tratamientos
+  const [itemsGlobales, setItemsGlobales] = useState<any[]>([]) 
   const [guardando, setGuardando] = useState(false)
   const [cargando, setCargando] = useState(true)
 
@@ -26,23 +27,26 @@ export default function OdontogramaPage() {
   async function fetchTodo() {
     setCargando(true)
     try {
-      // 1. Traer el estado maestro (caries, restauraciones, ausencias)
+      // 1. Traer el estado maestro
       const { data: odonto } = await supabase
         .from('odontogramas')
         .select('dentadura')
         .eq('paciente_id', id)
         .maybeSingle()
       
-      // 2. Traer todos los items de todos los presupuestos para mostrar los logos clínicos
-      const { data: items } = await supabase
-        .from('presupuesto_items')
-        .select('*, prestaciones:prestacion_id(icono_tipo)')
-        .in('presupuesto_id', (
-            await supabase.from('presupuestos').select('id').eq('paciente_id', id)
-        ).data?.map(p => p.id) || [])
+      // 2. Traer todos los presupuestos para consolidar tratamientos
+      const { data: presIds } = await supabase.from('presupuestos').select('id').eq('paciente_id', id);
+      
+      if (presIds && presIds.length > 0) {
+        const { data: items } = await supabase
+          .from('presupuesto_items')
+          .select('*, prestaciones:prestacion_id(icono_tipo)')
+          .in('presupuesto_id', presIds.map(p => p.id))
 
-      if (odonto) setDentadura(odonto.dentadura)
-      if (items) setItemsGlobales(items)
+        if (items) setItemsGlobales(items)
+      }
+
+      if (odonto) setDentadura(odonto.dentadura || {})
     } catch (e) {
       console.error(e)
     } finally {
@@ -65,7 +69,6 @@ export default function OdontogramaPage() {
 
   const guardarOdontograma = async () => {
     setGuardando(true)
-    // ESTO SOLO AFECTA AL MAESTRO, NO A LOS PRESUPUESTOS INDIVIDUALES
     const { error } = await supabase
       .from('odontogramas')
       .upsert({ 
@@ -74,8 +77,8 @@ export default function OdontogramaPage() {
         ultima_actualizacion: new Date() 
       }, { onConflict: 'paciente_id' })
 
-    if (error) alert("Error al guardar")
-    else alert("Estado clínico principal actualizado")
+    if (error) toast.error("Error al guardar")
+    else toast.success("Ficha Maestra actualizada")
     setGuardando(false)
   }
 
@@ -84,18 +87,18 @@ export default function OdontogramaPage() {
   return (
     <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} className="bg-white p-10 rounded-[3rem] shadow-sm border border-slate-100">
       <div className="flex justify-between items-center mb-10">
-        <div>
+        <div className="text-left">
           <h3 className="text-2xl font-black tracking-tight flex items-center gap-3">
-            <Activity size={24} className="text-blue-600"/> Odontograma Clínico Principal
+            <Activity size={24} className="text-blue-600"/> Odontograma Clínico Maestro
           </h3>
-          <p className="text-slate-400 text-[10px] font-bold uppercase tracking-widest mt-1">Este mapa representa el estado actual permanente del paciente</p>
+          <p className="text-slate-400 text-[10px] font-bold uppercase tracking-widest mt-1 text-left">Estado permanente consolidado del paciente</p>
         </div>
         
         <div className="flex gap-4 items-center">
           <div className="flex gap-4 bg-slate-50 px-6 py-2 rounded-2xl border border-slate-100">
-            <LegendItem color="bg-white border border-slate-200" label="Sano" />
-            <LegendItem color="bg-red-500 shadow-sm" label="Caries" />
-            <LegendItem color="bg-blue-500 shadow-sm" label="Restauración" />
+            <LegendItem color="bg-red-500" label="Caries (M)" />
+            <LegendItem color="bg-blue-500" label="Restauración (M)" />
+            <LegendItem color="bg-emerald-500" label="Realizado (P)" />
           </div>
           <button 
             onClick={guardarOdontograma} 
@@ -112,19 +115,19 @@ export default function OdontogramaPage() {
         <div className="min-w-[1000px] flex flex-col gap-14 items-center">
           <div className="flex justify-center items-end gap-1">
             <div className="flex gap-1 border-r-4 border-slate-100 pr-4">
-              {c1.map(pid => <Diente key={pid} id={pid} datos={dentadura[pid]} itemsDiente={itemsGlobales.filter(i => i.diente_id === pid)} onClickCara={cambiarEstadoCara} onDienteClick={cambiarEstadoGeneral} superior />)}
+              {c1.map(pid => <DienteMaestro key={pid} id={pid} datos={dentadura[pid]} itemsDiente={itemsGlobales.filter(i => i.diente_id === pid)} onClickCara={cambiarEstadoCara} onDienteClick={cambiarEstadoGeneral} superior />)}
             </div>
             <div className="flex gap-1 pl-4">
-              {c2.map(pid => <Diente key={pid} id={pid} datos={dentadura[pid]} itemsDiente={itemsGlobales.filter(i => i.diente_id === pid)} onClickCara={cambiarEstadoCara} onDienteClick={cambiarEstadoGeneral} superior />)}
+              {c2.map(pid => <DienteMaestro key={pid} id={pid} datos={dentadura[pid]} itemsDiente={itemsGlobales.filter(i => i.diente_id === pid)} onClickCara={cambiarEstadoCara} onDienteClick={cambiarEstadoGeneral} superior />)}
             </div>
           </div>
 
           <div className="flex justify-center items-start gap-1">
             <div className="flex gap-1 border-r-4 border-slate-100 pr-4">
-              {c3.map(pid => <Diente key={pid} id={pid} datos={dentadura[pid]} itemsDiente={itemsGlobales.filter(i => i.diente_id === pid)} onClickCara={cambiarEstadoCara} onDienteClick={cambiarEstadoGeneral} superior={false} />)}
+              {c3.map(pid => <DienteMaestro key={pid} id={pid} datos={dentadura[pid]} itemsDiente={itemsGlobales.filter(i => i.diente_id === pid)} onClickCara={cambiarEstadoCara} onDienteClick={cambiarEstadoGeneral} superior={false} />)}
             </div>
             <div className="flex gap-1 pl-4">
-              {c4.map(pid => <Diente key={pid} id={pid} datos={dentadura[pid]} itemsDiente={itemsGlobales.filter(i => i.diente_id === pid)} onClickCara={cambiarEstadoCara} onDienteClick={cambiarEstadoGeneral} superior={false} />)}
+              {c4.map(pid => <DienteMaestro key={pid} id={pid} datos={dentadura[pid]} itemsDiente={itemsGlobales.filter(i => i.diente_id === pid)} onClickCara={cambiarEstadoCara} onDienteClick={cambiarEstadoGeneral} superior={false} />)}
             </div>
           </div>
         </div>
@@ -133,11 +136,19 @@ export default function OdontogramaPage() {
   )
 }
 
-function Diente({ id, datos, onClickCara, onDienteClick, superior = false, itemsDiente = [] }: any) {
-  const estadoDiente = datos?.estado_general || 'presente';
+function DienteMaestro({ id, datos, onClickCara, onDienteClick, superior = false, itemsDiente = [] }: any) {
+  const estadoGeneral = datos?.estado_general || 'presente';
   
-  // Lógica de iconos mapeados (Igual que en presupuestos pero leyendo de itemsGlobales)
-  const tiposIconos = itemsDiente.map((i: any) => i.prestaciones?.icono_tipo).filter(Boolean);
+  // Mapeo de iconos desde los tratamientos con estado de realización
+  const iconosTratamientos = itemsDiente.map((i: any) => ({
+    tipo: i.prestaciones?.icono_tipo,
+    realizado: i.estado === 'realizado'
+  }));
+
+  const colorTratamiento = (tipo: string) => {
+    const item = iconosTratamientos.find(ico => ico.tipo === tipo);
+    return item?.realizado ? "#10b981" : "#f43f5e"; // Esmeralda (realizado) o Rosa (pendiente)
+  };
 
   const getClaseCara = (cara: string) => {
     const e = datos?.[cara] || 'sano';
@@ -146,36 +157,76 @@ function Diente({ id, datos, onClickCara, onDienteClick, superior = false, items
     return 'fill-white stroke-slate-200';
   };
 
+  const isMolar = [18, 17, 16, 26, 27, 28, 36, 37, 38, 46, 47, 48].includes(id);
+  const isIncisivo = [12, 11, 21, 22, 31, 32, 41, 42].includes(id);
+  const isCanino = [13, 23, 33, 43].includes(id);
+
+  const getDientePath = () => {
+    if (isMolar) return "M20,20 L80,20 L85,80 Q85,100 50,100 Q15,100 15,80 Z";
+    if (isIncisivo) return "M35,20 L65,20 L68,85 Q68,100 50,100 Q32,100 32,85 Z";
+    if (isCanino) return "M35,30 L50,15 L65,30 L68,85 Q68,100 50,100 Q32,100 32,85 Z";
+    return "M30,20 L70,20 L75,80 Q75,100 50,100 Q25,100 25,80 Z";
+  };
+
   return (
     <div className={`flex flex-col items-center gap-2 group relative ${superior ? 'flex-col' : 'flex-col-reverse'}`}>
-      <span className="text-[10px] font-black text-slate-400">{id}</span>
+      <span className="text-[10px] font-black text-slate-400 italic">{id}</span>
       
-      <div className={`relative w-12 h-14 flex items-center justify-center transition-all ${estadoDiente === 'ausente' ? 'grayscale opacity-10' : 'hover:scale-110'}`}>
+      <div className={`relative w-12 h-18 flex items-center justify-center transition-all ${estadoGeneral === 'ausente' ? 'grayscale opacity-20' : 'hover:scale-110'}`}>
         <button onClick={(e) => { e.stopPropagation(); onDienteClick(id); }} className="absolute -top-1 -right-1 opacity-0 group-hover:opacity-100 transition-opacity bg-slate-800 text-white p-1 rounded-full shadow-lg z-20">
-            {estadoDiente === 'ausente' ? <RotateCcw size={8}/> : <X size={8}/>}
+            {estadoGeneral === 'ausente' ? <RotateCcw size={8}/> : <X size={8}/>}
         </button>
 
-        <svg viewBox="0 0 100 100" className={`w-full h-full ${!superior ? 'rotate-180' : ''}`}>
+        <svg viewBox="0 0 100 120" className={`w-full h-full ${!superior ? 'rotate-180' : ''}`}>
            {/* Anatomía base */}
-           <path d="M25,20 L75,20 L80,85 Q80,95 50,95 Q20,95 20,85 Z" fill={tiposIconos.includes('corona') ? "#fbbf24" : "white"} fillOpacity={tiposIconos.includes('corona') ? "0.3" : "1"} stroke={tiposIconos.length > 0 ? "#3b82f6" : "#cbd5e1"} strokeWidth="5"/>
+           <path d={getDientePath()} fill="white" stroke={iconosTratamientos.length > 0 ? "#3b82f6" : "#cbd5e1"} strokeWidth="4"/>
            
-           {/* Logos clínicos automáticos */}
-           {tiposIconos.includes('endodoncia') && <path d="M45,25 Q50,50 45,85" stroke="#ef4444" strokeWidth="8" fill="none" strokeLinecap="round" />}
-           {tiposIconos.includes('extraccion') && <g stroke="#ef4444" strokeWidth="10"><line x1="20" y1="20" x2="80" y2="90" /><line x1="80" y1="20" x2="20" y2="90" /></g>}
-           {tiposIconos.includes('implante') && <rect x="40" y="55" width="20" height="35" rx="2" fill="#64748b" />}
-           {tiposIconos.includes('restauracion') && <circle cx="50" cy="45" r="12" fill="#3b82f6" />}
-           {tiposIconos.includes('perno') && <path d="M50,10 L50,45 M35,45 L65,45" stroke="#1e293b" strokeWidth="8" />}
-           {tiposIconos.includes('rayosx') && <path d="M85,30 L95,30 M90,25 L90,35" stroke="#f59e0b" strokeWidth="4" />}
-           {tiposIconos.includes('pulido') && <path d="M25,80 Q50,90 75,80" stroke="#10b981" strokeWidth="6" fill="none" />}
+           {/* CAPA DE TRATAMIENTOS NO COLISIONANTES */}
+           
+           {/* Endodoncia (Central) */}
+           {iconosTratamientos.some(i => i.tipo === 'endodoncia') && (
+             <path d="M50,25 L50,90" stroke={colorTratamiento('endodoncia')} strokeWidth="10" strokeLinecap="round" opacity="0.8" />
+           )}
 
-           {estadoDiente === 'ausente' && (
-             <g stroke="#cbd5e1" strokeWidth="3"><line x1="0" y1="0" x2="100" y2="100" /><line x1="100" y1="0" x2="0" y2="100" /></g>
+           {/* Implante (Raíz / Parte inferior) */}
+           {iconosTratamientos.some(i => i.tipo === 'implante') && (
+             <g fill={colorTratamiento('implante')}>
+               <rect x="40" y="75" width="20" height="35" rx="2" />
+               <path d="M40,85 L60,85 M40,95 L60,95" stroke="white" strokeWidth="2" />
+             </g>
+           )}
+
+           {/* Corona (Envolvente exterior) */}
+           {iconosTratamientos.some(i => i.tipo === 'corona') && (
+             <circle cx="50" cy="35" r="42" fill="none" stroke={colorTratamiento('corona')} strokeWidth="4" strokeDasharray="6 3" />
+           )}
+
+           {/* Perno (Estructura superior) */}
+           {iconosTratamientos.some(i => i.tipo === 'perno') && (
+             <g stroke={colorTratamiento('perno')} strokeWidth="6" strokeLinecap="round">
+               <line x1="50" y1="35" x2="50" y2="60" />
+               <line x1="35" y1="35" x2="65" y2="35" />
+             </g>
+           )}
+
+           {/* Sellante (Texto S) */}
+           {iconosTratamientos.some(i => i.tipo === 'sellante') && (
+             <text x="50" y="55" textAnchor="middle" fontSize="35" fontWeight="900" fill={colorTratamiento('sellante')} style={{ userSelect: 'none' }}>S</text>
+           )}
+
+           {/* Ausencia / Extracción Maestro (Capa superior roja) */}
+           {estadoGeneral === 'ausente' && (
+             <g stroke="#ef4444" strokeWidth="10" strokeLinecap="round">
+               <line x1="10" y1="10" x2="90" y2="110" />
+               <line x1="90" y1="10" x2="10" y2="110" />
+             </g>
            )}
         </svg>
       </div>
 
-      <div className={`relative transition-all ${estadoDiente === 'ausente' ? 'opacity-0 pointer-events-none' : ''}`}>
-        <svg width="36" height="36" viewBox="0 0 100 100" className="cursor-pointer drop-shadow-sm">
+      {/* Control de Caras (Ficha Maestra - Independiente de iconos de tratamiento) */}
+      <div className={`relative transition-all ${estadoGeneral === 'ausente' ? 'opacity-0 pointer-events-none' : ''}`}>
+        <svg width="32" height="32" viewBox="0 0 100 100" className="cursor-pointer drop-shadow-sm">
           <path d="M10,10 L90,10 L70,30 L30,30 Z" className={getClaseCara('top')} onClick={() => onClickCara(id, 'top')} />
           <path d="M10,90 L90,90 L70,70 L30,70 Z" className={getClaseCara('bottom')} onClick={() => onClickCara(id, 'bottom')} />
           <path d="M10,10 L30,30 L30,70 L10,90 Z" className={getClaseCara('left')} onClick={() => onClickCara(id, 'left')} />
@@ -191,7 +242,7 @@ function LegendItem({ color, label }: { color: string, label: string }) {
   return (
     <div className="flex items-center gap-2">
       <div className={`w-3 h-3 rounded-full ${color}`}></div>
-      <span className="text-[10px] font-black text-slate-400 uppercase">{label}</span>
+      <span className="text-[10px] font-black text-slate-400 uppercase tracking-tighter">{label}</span>
     </div>
   )
 }
