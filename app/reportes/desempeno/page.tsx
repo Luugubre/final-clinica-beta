@@ -54,7 +54,6 @@ export default function PanelDesempenoPage() {
         supabase.from('pagos').select('monto, fecha_pago').gte('fecha_pago', fechaHistorialInicio).lte('fecha_pago', finMes)
       ])
 
-      // 1. PRODUCCIÓN POR PROFESIONAL
       const abonosPorEspecialista = (pagosData || []).reduce((acc: any, curr: any) => {
         const nombre = (curr.perfiles as any)?.nombre_completo || 'Clínica / General'
         acc[nombre] = (acc[nombre] || 0) + Number(curr.monto || 0)
@@ -65,7 +64,6 @@ export default function PanelDesempenoPage() {
         .map(([name, value]) => ({ name, value }))
         .sort((a: any, b: any) => b.value - a.value)
 
-      // 2. ATENCIONES POR CONVENIO
       const atencionesConvenio = (atencionesData || []).reduce((acc: any, curr: any) => {
         const convenio = (curr.pacientes as any)?.prevision || 'Particular'
         acc[convenio] = (acc[convenio] || 0) + 1
@@ -75,7 +73,6 @@ export default function PanelDesempenoPage() {
       const chartPieConvenio = Object.entries(atencionesConvenio)
         .map(([name, value]) => ({ name, value }))
 
-      // 3. VENTAS TOTALES (Caja)
       const ventasCajaMesActual = (cajasData || []).reduce((acc: number, caja: any) => {
         const neto = caja.estado === 'cerrada' 
           ? (Number(caja.monto_cierre || 0) - Number(caja.monto_apertura || 0))
@@ -83,7 +80,6 @@ export default function PanelDesempenoPage() {
         return acc + neto
       }, 0)
 
-      // 4. HISTORIAL
       const mesesLabels = ["Ene", "Feb", "Mar", "Abr", "May", "Jun", "Jul", "Ago", "Sep", "Oct", "Nov", "Dic"]
       const chartHistory = []
       for (let i = 5; i >= 0; i--) {
@@ -132,7 +128,6 @@ export default function PanelDesempenoPage() {
     <main className="min-h-screen bg-[#F8FAFC] p-8 max-md:p-4 font-sans text-slate-900 text-left">
       <div className="max-w-7xl mx-auto space-y-8 text-left">
         
-        {/* HEADER */}
         <div className="flex flex-col md:flex-row justify-between items-center bg-white p-8 rounded-[3rem] shadow-sm border border-slate-100 gap-6 text-left">
           <div className="text-left">
             <h1 className="text-3xl font-black uppercase italic tracking-tighter text-slate-800 leading-none text-left">Panel de Desempeño</h1>
@@ -148,7 +143,6 @@ export default function PanelDesempenoPage() {
           </div>
         </div>
 
-        {/* METRICAS */}
         <div className="grid grid-cols-1 md:grid-cols-5 gap-4 text-left">
           <MetricCard title="Pacientes Nuevos" value={data.agenda.pacientesNuevos} icon={<Users size={20}/>} color="blue" />
           <MetricCard title="Citas Anuladas" value={data.agenda.anuladas} icon={<AlertCircle size={20}/>} color="red" />
@@ -157,7 +151,6 @@ export default function PanelDesempenoPage() {
           <MetricCard title="Finalizados" value={`${data.agenda.ocupacion}%`} icon={<CheckCircle2 size={20}/>} color="blue" />
         </div>
 
-        {/* GRAFICOS HISTORICOS */}
         <div className="grid grid-cols-1 lg:grid-cols-2 gap-8 text-left">
           <div className="bg-white p-10 rounded-[3.5rem] shadow-sm border border-slate-100 text-left">
             <div className="flex justify-between items-start mb-8 text-left">
@@ -173,7 +166,10 @@ export default function PanelDesempenoPage() {
                 <AreaChart data={data?.charts?.history || []}>
                   <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#f1f5f9" />
                   <XAxis dataKey="name" axisLine={false} tickLine={false} className="text-[10px] font-bold" />
-                  <Tooltip contentStyle={{borderRadius: '20px', border:'none', boxShadow: '0 10px 15px -3px rgba(0,0,0,0.1)'}} />
+                  <Tooltip 
+                    contentStyle={{borderRadius: '20px', border:'none', boxShadow: '0 10px 15px -3px rgba(0,0,0,0.1)'}} 
+                    formatter={(val: any) => `$${Number(val || 0).toLocaleString('es-CL')}`}
+                  />
                   <Area type="monotone" dataKey="ventas" stroke="#3b82f6" strokeWidth={4} fill="#3b82f6" fillOpacity={0.1} />
                 </AreaChart>
               </ResponsiveContainer>
@@ -194,7 +190,10 @@ export default function PanelDesempenoPage() {
                 <BarChart data={data?.charts?.history || []}>
                   <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#f1f5f9" />
                   <XAxis dataKey="name" axisLine={false} tickLine={false} className="text-[10px] font-bold uppercase" />
-                  <Tooltip contentStyle={{borderRadius: '20px', border:'none', boxShadow: '0 10px 15px -3px rgba(0,0,0,0.1)'}} />
+                  <Tooltip 
+                    contentStyle={{borderRadius: '20px', border:'none', boxShadow: '0 10px 15px -3px rgba(0,0,0,0.1)'}} 
+                    formatter={(val: any) => `$${Number(val || 0).toLocaleString('es-CL')}`}
+                  />
                   <Bar dataKey="recaudacion" fill="#10b981" radius={[10, 10, 0, 0]} barSize={20} />
                 </BarChart>
               </ResponsiveContainer>
@@ -202,7 +201,6 @@ export default function PanelDesempenoPage() {
           </div>
         </div>
 
-        {/* PRODUCCION ESPECIALISTA Y CONVENIO */}
         <div className="grid grid-cols-1 lg:grid-cols-2 gap-8 text-left">
           <div className="bg-white p-10 rounded-[3.5rem] shadow-sm border border-slate-100 text-left">
             <h3 className="text-xs font-black uppercase text-slate-400 tracking-widest mb-8 flex items-center gap-2 text-left">
@@ -214,7 +212,10 @@ export default function PanelDesempenoPage() {
                   <BarChart data={data.charts.ventasProf} layout="vertical" margin={{ left: 10, right: 30 }}>
                     <XAxis type="number" hide />
                     <YAxis dataKey="name" type="category" axisLine={false} tickLine={false} width={130} className="text-[9px] font-black uppercase" />
-                    <Tooltip cursor={{fill: 'transparent'}} formatter={(val: number) => `$${val.toLocaleString('es-CL')}`} />
+                    <Tooltip 
+                      cursor={{fill: 'transparent'}} 
+                      formatter={(val: any) => `$${Number(val || 0).toLocaleString('es-CL')}`} 
+                    />
                     <Bar dataKey="value" fill="#3b82f6" radius={[0, 10, 10, 0]} barSize={25}>
                       {data.charts.ventasProf.map((entry: any, index: number) => (
                         <Cell key={`cell-${index}`} fill={index === 0 ? '#3b82f6' : '#94a3b8'} fillOpacity={1 - (index * 0.15)} />
@@ -247,7 +248,7 @@ export default function PanelDesempenoPage() {
                         <Cell key={`cell-pie-${index}`} fill={COLORS[index % COLORS.length]} />
                       ))}
                     </Pie>
-                    <Tooltip />
+                    <Tooltip formatter={(val: any) => Number(val || 0)} />
                     <Legend verticalAlign="bottom" height={36}/>
                   </PieChart>
                 </ResponsiveContainer>
@@ -258,7 +259,6 @@ export default function PanelDesempenoPage() {
           </div>
         </div>
 
-        {/* PIE DE DASHBOARD */}
         <div className="grid grid-cols-1 lg:grid-cols-2 gap-8 pb-10 text-left">
           <div className="bg-slate-900 p-10 rounded-[3.5rem] text-white flex flex-col justify-between shadow-2xl relative overflow-hidden text-left">
             <div className="absolute top-0 right-0 p-12 opacity-5 rotate-12 pointer-events-none"><Activity size={200} /></div>
