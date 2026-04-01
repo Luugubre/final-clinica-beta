@@ -33,19 +33,32 @@ export default function GestionStaffPage() {
 
   async function fetchData() {
     setCargando(true)
-    const { data: perfiles } = await supabase.from('perfiles').select('*').order('rol')
-    const { data: esps } = await supabase.from('especialidades').select('*').order('nombre')
-    const { data: profs } = await supabase.from('profesionales').select('user_id, especialidades(nombre)')
-    
-    if (perfiles) {
-        const staffMapeado = perfiles.map(p => ({
-            ...p,
-            especialidad: profs?.find(pr => pr.user_id === p.id)?.especialidades?.nombre
-        }))
-        setStaff(staffMapeado)
+    try {
+      const { data: perfiles } = await supabase.from('perfiles').select('*').order('rol')
+      const { data: esps } = await supabase.from('especialidades').select('*').order('nombre')
+      const { data: profs } = await supabase.from('profesionales').select('user_id, especialidades(nombre)')
+      
+      if (perfiles) {
+          const staffMapeado = perfiles.map(p => {
+              // Buscamos el registro en la tabla profesionales para obtener la especialidad
+              const profData = profs?.find(pr => pr.user_id === p.id);
+              
+              // Aplicamos casting 'as any' para evitar el error de TypeScript en el build de Vercel
+              const nombreEspecialidad = (profData?.especialidades as any)?.nombre;
+
+              return {
+                  ...p,
+                  especialidad: nombreEspecialidad || 'Área Administrativa'
+              }
+          })
+          setStaff(staffMapeado)
+      }
+      if (esps) setEspecialidades(esps)
+    } catch (error) {
+      console.error("Error al cargar datos:", error)
+    } finally {
+      setCargando(false)
     }
-    if (esps) setEspecialidades(esps)
-    setCargando(false)
   }
 
   const handleGuardar = async () => {
@@ -88,7 +101,7 @@ export default function GestionStaffPage() {
 
   const abrirEditor = (persona: any) => {
     setEditandoUser(persona)
-    const nombres = persona.nombre_completo.split(' ');
+    const nombres = (persona.nombre_completo || '').split(' ');
     setForm({ 
         ...initialState, 
         nombre: nombres[0] || '', 
@@ -115,7 +128,7 @@ export default function GestionStaffPage() {
             <div className="bg-slate-900 p-5 rounded-[2rem] text-white shadow-xl">
               <UserCog size={32} />
             </div>
-            <div>
+            <div className="text-left">
               <h1 className="text-3xl font-black text-slate-800 uppercase italic leading-none">Equipo Clínico</h1>
               <p className="text-slate-400 text-[10px] font-bold uppercase tracking-widest mt-2">Seguridad y Personal</p>
             </div>
@@ -127,14 +140,14 @@ export default function GestionStaffPage() {
               <input 
                 type="text" 
                 placeholder="Filtrar por nombre..." 
-                className="pl-12 pr-6 py-4 bg-slate-50 border-none rounded-2xl text-xs font-bold w-full outline-none shadow-inner"
+                className="pl-12 pr-6 py-4 bg-slate-50 border-none rounded-2xl text-xs font-bold w-full outline-none shadow-inner text-slate-900"
                 value={busqueda}
                 onChange={(e) => setBusqueda(e.target.value)}
               />
             </div>
             <button 
               onClick={() => { resetForm(); setModalAbierto(true); }} 
-              className="bg-blue-600 text-white px-8 py-4 rounded-2xl font-black text-xs uppercase hover:bg-slate-900 transition-all shadow-xl"
+              className="bg-blue-600 text-white px-8 py-4 rounded-2xl font-black text-xs uppercase hover:bg-slate-900 transition-all shadow-xl flex items-center gap-2"
             >
               <Plus size={18} /> Nuevo Staff
             </button>
@@ -143,13 +156,13 @@ export default function GestionStaffPage() {
 
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
           {staff
-            .filter(p => p.nombre_completo.toLowerCase().includes(busqueda.toLowerCase()))
+            .filter(p => (p.nombre_completo || '').toLowerCase().includes(busqueda.toLowerCase()))
             .map(persona => (
                 <motion.div 
                     key={persona.id} 
                     whileHover={{ y: -5 }} 
                     onClick={() => abrirEditor(persona)} 
-                    className="bg-white p-8 rounded-[2.5rem] border border-slate-100 shadow-sm cursor-pointer group relative overflow-hidden"
+                    className="bg-white p-8 rounded-[2.5rem] border border-slate-100 shadow-sm cursor-pointer group relative overflow-hidden text-left"
                 >
                     <div className={`absolute top-0 right-0 p-4 text-[8px] font-black uppercase tracking-widest rounded-bl-2xl ${
                         persona.rol === 'ADMIN' ? 'bg-red-500 text-white' : 
@@ -201,13 +214,13 @@ export default function GestionStaffPage() {
                 </button>
               </div>
 
-              <div className="flex-1 p-10 space-y-6 overflow-y-auto">
+              <div className="flex-1 p-10 space-y-6 overflow-y-auto text-left">
                 <div className="space-y-3">
                   <label className="text-[10px] font-black text-slate-400 uppercase italic ml-3 flex items-center gap-2">
                     <ShieldCheck size={12}/> Tipo de Cuenta
                   </label>
                   <select 
-                    className="w-full bg-slate-50 p-5 rounded-2xl text-xs font-bold border-none shadow-inner outline-none" 
+                    className="w-full bg-slate-50 p-5 rounded-2xl text-xs font-bold border-none shadow-inner outline-none text-slate-900" 
                     value={form.rol} 
                     onChange={(e) => setForm({...form, rol: e.target.value})}
                   >
@@ -222,7 +235,6 @@ export default function GestionStaffPage() {
                   <Input label="Apellido" value={form.apellido} onChange={(v:any) => setForm({...form, apellido: v})} icon={<UserCircle size={14}/>} />
                 </div>
 
-                {/* CAMPO RUT AÑADIDO */}
                 <Input 
                   label="RUT del Profesional" 
                   placeholder="12.345.678-9"
@@ -233,7 +245,7 @@ export default function GestionStaffPage() {
 
                 {!editandoUser && (
                   <div className="space-y-4 bg-slate-50 p-8 rounded-[2.5rem] border border-slate-100 shadow-inner">
-                    <p className="text-[10px] font-black text-slate-400 uppercase italic flex items-center gap-2 mb-2"><KeyRound size={12}/> Credenciales</p>
+                    <p className="text-[10px] font-black text-slate-400 uppercase italic flex items-center gap-2 mb-2 text-left"><KeyRound size={12}/> Credenciales</p>
                     <Input label="Usuario ID" value={form.username} icon={<AtSign size={14}/>} onChange={(v:any) => setForm({...form, username: v.toLowerCase().replace(/\s+/g, '')})} />
                     <Input label="Contraseña" value={form.password} type="password" icon={<Lock size={14}/>} onChange={(v:any) => setForm({...form, password: v})} />
                   </div>
@@ -245,7 +257,7 @@ export default function GestionStaffPage() {
                         <Stethoscope size={12}/> Especialidad
                     </label>
                     <select 
-                      className="w-full bg-slate-50 p-5 rounded-2xl text-xs font-bold border-none shadow-inner outline-none" 
+                      className="w-full bg-slate-50 p-5 rounded-2xl text-xs font-bold border-none shadow-inner outline-none text-slate-900" 
                       value={form.especialidad_id} 
                       onChange={(e) => setForm({...form, especialidad_id: e.target.value})}
                     >
@@ -280,14 +292,14 @@ export default function GestionStaffPage() {
 
 function Input({ label, value, onChange, icon, type = "text", placeholder = "" }: any) {
   return (
-    <div className="space-y-2">
+    <div className="space-y-2 text-left">
       <label className="text-[10px] font-black text-slate-400 uppercase italic ml-3 flex items-center gap-2">{icon} {label}</label>
       <input 
         type={type} 
-        value={value} 
+        value={value || ''} 
         placeholder={placeholder}
         onChange={(e) => onChange(e.target.value)} 
-        className="w-full bg-white p-5 rounded-2xl text-xs font-bold outline-none border border-slate-100 shadow-sm focus:ring-2 ring-blue-500/10" 
+        className="w-full bg-white p-5 rounded-2xl text-xs font-bold outline-none border border-slate-100 shadow-sm focus:ring-2 ring-blue-500/10 text-slate-900" 
       />
     </div>
   )
