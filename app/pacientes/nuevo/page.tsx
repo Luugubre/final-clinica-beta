@@ -16,7 +16,8 @@ export default function NuevoPaciente() {
   const [exito, setExito] = useState(false)
   const [listaConvenios, setListaConvenios] = useState<string[]>([])
   
-  const [form, setForm] = useState({
+  // Estado inicial robusto
+  const [form, setForm] = useState<any>({
     tipo_paciente: '-',
     nombre: '',
     apellido: '',
@@ -71,14 +72,13 @@ export default function NuevoPaciente() {
 
     try {
       // 1. VERIFICACIÓN MANUAL DE DUPLICADOS Y ESTADO
-      const { data: existente, error: errorBusqueda } = await supabase
+      const { data: existente } = await supabase
         .from('pacientes')
         .select('nombre, apellido, activo, motivo_deshabilitado')
         .eq('rut', rutLimpio)
         .maybeSingle()
 
       if (existente) {
-        // --- LÓGICA DE USUARIO RESTRINGIDO ---
         if (existente.activo === false) {
             toast.warning("PACIENTE RESTRINGIDO", {
                 description: `El RUT pertenece a ${existente.nombre} ${existente.apellido}, quien se encuentra deshabilitado. Motivo: ${existente.motivo_deshabilitado || 'No especificado'}.`,
@@ -127,11 +127,11 @@ export default function NuevoPaciente() {
   }
 
   if (exito) return (
-    <div className="min-h-screen bg-slate-50 flex flex-col items-center justify-center p-6 text-left">
+    <div className="min-h-screen bg-slate-50 flex flex-col items-center justify-center p-6 text-center">
       <div className="bg-white p-12 rounded-[3rem] shadow-2xl text-center max-w-sm w-full border border-slate-100">
         <CheckCircle2 className="text-emerald-500 mx-auto mb-6" size={80} />
         <h2 className="text-3xl font-black text-slate-900 tracking-tighter">¡Registrado!</h2>
-        <p className="text-slate-500 font-bold mt-2 text-sm uppercase tracking-widest">Ficha creada con éxito.</p>
+        <p className="text-slate-500 font-bold mt-2 text-sm uppercase tracking-widest text-center">Ficha creada con éxito.</p>
       </div>
     </div>
   )
@@ -146,21 +146,21 @@ export default function NuevoPaciente() {
         <div className="bg-blue-600 w-16 h-16 rounded-[1.8rem] flex items-center justify-center text-white mb-6 shadow-xl shadow-blue-100">
           <UserPlus size={32} />
         </div>
-        <h1 className="text-5xl font-black text-slate-900 tracking-tighter leading-tight italic">Nueva Ficha</h1>
-        <p className="text-slate-500 font-medium mt-2 uppercase text-[10px] tracking-[0.2em]">Registro Integral de Paciente</p>
+        <h1 className="text-5xl font-black text-slate-900 tracking-tighter leading-tight italic text-left">Nueva Ficha</h1>
+        <p className="text-slate-500 font-medium mt-2 uppercase text-[10px] tracking-[0.2em] text-left">Registro Integral de Paciente</p>
       </header>
 
-      <form onSubmit={handleSubmit} className="space-y-8">
+      <form onSubmit={handleSubmit} className="space-y-8 text-left">
         {/* SECCIÓN 1: DATOS OBLIGATORIOS */}
-        <div className="bg-white p-10 lg:p-14 rounded-[3rem] shadow-xl border border-slate-100">
+        <div className="bg-white p-10 lg:p-14 rounded-[3rem] shadow-xl border border-slate-100 text-left">
           <div className="flex items-center gap-2 mb-10 text-blue-600 text-left">
             <Info size={18} />
-            <h2 className="font-black text-[10px] uppercase tracking-[0.3em]">Información Obligatoria</h2>
+            <h2 className="font-black text-[10px] uppercase tracking-[0.3em] text-left">Información Obligatoria</h2>
           </div>
-          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
+          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6 text-left">
             <div className="md:col-span-2 lg:col-span-4 text-left">
-               <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest ml-4 block mb-2">Tipo de Paciente *</label>
-               <select required className="w-full p-5 bg-slate-50 rounded-2xl font-bold text-slate-900 outline-none focus:ring-2 ring-blue-500/20 appearance-none transition-all cursor-pointer"
+               <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest ml-4 block mb-2 text-left">Tipo de Paciente *</label>
+               <select required className="w-full p-5 bg-slate-50 rounded-2xl font-bold text-slate-900 outline-none focus:ring-2 ring-blue-500/20 appearance-none transition-all cursor-pointer border-none"
                 value={form.tipo_paciente} onChange={(e) => setForm({...form, tipo_paciente: e.target.value})}>
                  <option value="-">-</option>
                  <option value="discapacidad">Discapacidad</option>
@@ -178,12 +178,12 @@ export default function NuevoPaciente() {
         </div>
 
         {/* SECCIÓN 2: CONTACTO */}
-        <div className="bg-white p-10 lg:p-14 rounded-[3rem] shadow-xl border border-slate-100">
+        <div className="bg-white p-10 lg:p-14 rounded-[3rem] shadow-xl border border-slate-100 text-left">
           <div className="flex items-center gap-2 mb-10 text-emerald-600 text-left">
             <MapPin size={18} />
-            <h2 className="font-black text-[10px] uppercase tracking-[0.3em]">Contacto y Ubicación</h2>
+            <h2 className="font-black text-[10px] uppercase tracking-[0.3em] text-left">Contacto y Ubicación</h2>
           </div>
-          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6 text-left">
             <InputGroupSimple label="Dirección" value={form.direccion} onChange={(v:any) => setForm({...form, direccion: v})} />
             <InputGroupSimple label="Comuna" value={form.comuna} onChange={(v:any) => setForm({...form, comuna: v})} />
             <InputGroupSimple label="Ciudad" value={form.ciudad} onChange={(v:any) => setForm({...form, ciudad: v})} />
@@ -194,19 +194,19 @@ export default function NuevoPaciente() {
         </div>
 
         {/* SECCIÓN 3: OTROS Y APODERADO */}
-        <div className="bg-white p-10 lg:p-14 rounded-[3rem] shadow-xl border border-slate-100">
+        <div className="bg-white p-10 lg:p-14 rounded-[3rem] shadow-xl border border-slate-100 text-left">
           <div className="flex items-center gap-2 mb-10 text-amber-500 text-left">
             <Users size={18} />
-            <h2 className="font-black text-[10px] uppercase tracking-[0.3em]">Apoderado y Datos Sociales</h2>
+            <h2 className="font-black text-[10px] uppercase tracking-[0.3em] text-left">Apoderado y Datos Sociales</h2>
           </div>
-          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6 text-left">
             <InputGroupSimple label="Nombre Apoderado" value={form.apoderado_nombre} onChange={(v:any) => setForm({...form, apoderado_nombre: v})} />
             <InputGroupSimple label="RUT Apoderado" value={form.apoderado_rut} onChange={(v:any) => setForm({...form, apoderado_rut: v})} />
             <InputGroupSimple label="Referencia" value={form.referencia} onChange={(v:any) => setForm({...form, referencia: v})} />
             
             <div className="space-y-2 text-left">
-              <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest ml-4 block">Convenio</label>
-              <select className="w-full p-5 bg-slate-50 rounded-2xl font-bold text-slate-900 outline-none focus:ring-2 ring-blue-500/20 appearance-none cursor-pointer"
+              <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest ml-4 block text-left">Convenio</label>
+              <select className="w-full p-5 bg-slate-50 rounded-2xl font-bold text-slate-900 outline-none focus:ring-2 ring-blue-500/20 appearance-none transition-all cursor-pointer border-none"
                 value={form.prevision} onChange={(e) => setForm({...form, prevision: e.target.value})}>
                 {listaConvenios.map(conv => <option key={conv} value={conv}>{conv}</option>)}
               </select>
@@ -216,9 +216,9 @@ export default function NuevoPaciente() {
             <InputGroupSimple label="Profesión" value={form.actividad_profesion} onChange={(v:any) => setForm({...form, actividad_profesion: v})} />
           </div>
           <div className="mt-8 text-left">
-            <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest ml-4 block mb-2">Observaciones Internas</label>
-            <textarea className="w-full p-6 bg-slate-50 rounded-[2rem] font-medium outline-none focus:ring-2 ring-blue-500/10 transition-all shadow-inner text-slate-900" rows={4}
-              value={form.observaciones_personales} onChange={(e) => setForm({...form, observaciones_personales: e.target.value})} />
+            <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest ml-4 block mb-2 text-left">Observaciones Internas</label>
+            <textarea className="w-full p-6 bg-slate-50 rounded-[2rem] font-medium outline-none focus:ring-2 ring-blue-500/10 transition-all shadow-inner text-slate-900 border-none" rows={4}
+              value={form.observaciones_personales || ''} onChange={(e) => setForm({...form, observaciones_personales: e.target.value})} />
           </div>
         </div>
 
@@ -226,7 +226,7 @@ export default function NuevoPaciente() {
           <button 
             type="submit" 
             disabled={cargando} 
-            className="w-full bg-slate-900 text-white py-8 rounded-[3rem] font-black text-2xl shadow-2xl hover:bg-blue-600 transition-all active:scale-[0.98] flex justify-center items-center gap-4 disabled:opacity-50"
+            className="w-full bg-slate-900 text-white py-8 rounded-[3rem] font-black text-2xl shadow-2xl shadow-slate-200 hover:bg-blue-600 transition-all active:scale-[0.98] flex justify-center items-center gap-4 disabled:opacity-50"
           >
             {cargando ? <Loader2 className="animate-spin" size={32} /> : <Save size={32} />}
             {cargando ? 'Registrando...' : 'Finalizar y Crear Paciente'}
@@ -240,13 +240,13 @@ export default function NuevoPaciente() {
 function InputGroupSimple({ label, value, onChange, type = "text", required = false, placeholder = "" }: any) {
   return (
     <div className="space-y-2 text-left">
-      <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest ml-4">{label}</label>
+      <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest ml-4 text-left">{label}</label>
       <input 
         required={required} 
         type={type} 
         placeholder={placeholder}
-        className="w-full p-5 bg-slate-50 rounded-2xl font-bold outline-none focus:ring-2 ring-blue-500/10 transition-all shadow-inner text-slate-900"
-        value={value} 
+        className="w-full p-5 bg-slate-50 rounded-2xl font-bold outline-none focus:ring-2 ring-blue-500/10 transition-all shadow-inner text-slate-900 border-none"
+        value={value || ''} 
         onChange={(e) => onChange(e.target.value)}
       />
     </div>
