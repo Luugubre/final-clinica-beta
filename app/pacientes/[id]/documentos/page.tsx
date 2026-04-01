@@ -31,7 +31,6 @@ export default function DocumentosClinicosPage() {
     }
   }, [paciente_id])
 
-  // FUNCIÓN PARA TRAER NOMBRE, ESPECIALIDAD Y RUT DEL STAFF
   async function fetchDatosEspecialistas() {
     try {
       const { data: profs } = await supabase
@@ -42,7 +41,7 @@ export default function DocumentosClinicosPage() {
         .from('perfiles')
         .select('id, rut');
 
-      const mapeados = profs?.map(p => ({
+      const mapeados = profs?.map((p: any) => ({
         user_id: p.user_id,
         nombre_completo: `Dr/a. ${p.nombre} ${p.apellido}`,
         especialidad: p.especialidades?.nombre || 'Especialista',
@@ -68,7 +67,7 @@ export default function DocumentosClinicosPage() {
   async function fetchCategorias() {
     const { data } = await supabase.from('documentos_plantillas').select('*, documentos_categorias(nombre)')
     if (data) {
-      const categoriasMapeadas = data.map(p => ({
+      const categoriasMapeadas = data.map((p: any) => ({
         ...p,
         nombre_display: p.nombre && p.nombre !== 'NUEVO DOCUMENTO CLÍNICO' ? p.nombre : p.documentos_categorias?.nombre
       }))
@@ -89,11 +88,15 @@ export default function DocumentosClinicosPage() {
   }
 
   const seleccionarPlantilla = (plantilla: any) => {
-    setTituloEdicion((plantilla.nombre_display || plantilla.nombre || "DOCUMENTO CLÍNICO").toUpperCase());
-    const contenidoRaw = typeof plantilla.contenido === 'string' ? JSON.parse(plantilla.contenido) : plantilla.contenido;
-    setBloquesEdicion(Array.isArray(contenidoRaw) ? JSON.parse(JSON.stringify(contenidoRaw)) : []);
-    setDocSeleccionado('NUEVO');
-    setMostrandoCategorias(false);
+    try {
+      setTituloEdicion((plantilla.nombre_display || plantilla.nombre || "DOCUMENTO CLÍNICO").toUpperCase());
+      const contenidoRaw = typeof plantilla.contenido === 'string' ? JSON.parse(plantilla.contenido) : plantilla.contenido;
+      setBloquesEdicion(Array.isArray(contenidoRaw) ? JSON.parse(JSON.stringify(contenidoRaw)) : []);
+      setDocSeleccionado('NUEVO');
+      setMostrandoCategorias(false);
+    } catch (e) {
+      toast.error("Error al cargar la estructura de la plantilla");
+    }
   }
 
   const crearDocumentoEnBlanco = () => {
@@ -111,17 +114,21 @@ export default function DocumentosClinicosPage() {
       setDocSeleccionado(null);
       return;
     }
-    const autor = profesionalesFull.find(p => p.user_id === doc.especialista_id);
-    setDocSeleccionado({ 
-      ...doc, 
-      autor_nombre: autor?.nombre_completo || doc.llenado_por,
-      autor_rut: autor?.rut || '',
-      autor_especialidad: autor?.especialidad || ''
-    });
-    setTituloEdicion(doc.titulo_documento);
-    const contenidoRaw = typeof doc.contenido === 'string' ? JSON.parse(doc.contenido) : doc.contenido;
-    setBloquesEdicion(Array.isArray(contenidoRaw) ? JSON.parse(JSON.stringify(contenidoRaw)) : []);
-    setMostrandoCategorias(false);
+    try {
+      const autor = profesionalesFull.find(p => p.user_id === doc.especialista_id);
+      setDocSeleccionado({ 
+        ...doc, 
+        autor_nombre: autor?.nombre_completo || doc.llenado_por,
+        autor_rut: autor?.rut || '',
+        autor_especialidad: autor?.especialidad || ''
+      });
+      setTituloEdicion(doc.titulo_documento);
+      const contenidoRaw = typeof doc.contenido === 'string' ? JSON.parse(doc.contenido) : doc.contenido;
+      setBloquesEdicion(Array.isArray(contenidoRaw) ? JSON.parse(JSON.stringify(contenidoRaw)) : []);
+      setMostrandoCategorias(false);
+    } catch (e) {
+      toast.error("Error al abrir el documento guardado");
+    }
   }
 
   const guardarDocumentoFinal = async () => {
@@ -154,7 +161,9 @@ export default function DocumentosClinicosPage() {
 
   const eliminarDocumento = async (e: React.MouseEvent, docId: string) => {
     e.stopPropagation();
-    if (!confirm("¿Seguro que desea eliminar este documento?")) return;
+    if (typeof window !== 'undefined') {
+      if (!window.confirm("¿Seguro que desea eliminar este documento?")) return;
+    }
     try {
       await supabase.from('documentos_clinicos').delete().eq('id', docId);
       toast.success("Documento eliminado");
@@ -168,7 +177,6 @@ export default function DocumentosClinicosPage() {
   return (
     <div className="max-w-7xl mx-auto p-4 pb-20 space-y-8 text-left bg-slate-50 min-h-screen print:bg-white print:p-0 print:m-0">
       
-      {/* HEADER PRINCIPAL */}
       <header className="bg-white p-8 rounded-[3rem] shadow-sm border border-slate-100 flex items-center justify-between print:hidden text-left">
         <div className="text-left">
           <h3 className="text-2xl font-black text-slate-800 uppercase italic leading-none flex items-center gap-3 text-left">
@@ -184,7 +192,6 @@ export default function DocumentosClinicosPage() {
       </header>
 
       <div className="grid grid-cols-1 lg:grid-cols-5 gap-8 items-start text-left">
-        {/* SIDEBAR */}
         <aside className="lg:col-span-1 space-y-4 print:hidden text-left">
           <h4 className="text-[10px] font-black text-slate-400 uppercase tracking-widest ml-4 text-left">Historial</h4>
           <div className="space-y-2 text-left">
@@ -203,19 +210,18 @@ export default function DocumentosClinicosPage() {
           </div>
         </aside>
 
-        {/* ÁREA DE TRABAJO */}
         <main className="lg:col-span-4 flex flex-col md:flex-row gap-6 items-start text-left">
           <AnimatePresence mode="wait">
             {mostrandoCategorias ? (
-              <motion.div key="menu" initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} className="grid grid-cols-1 md:grid-cols-2 gap-4 w-full">
-                <button onClick={crearDocumentoEnBlanco} className="bg-slate-900 text-white p-10 rounded-[3rem] text-left hover:bg-black transition-all group border-4 border-transparent hover:border-blue-500/20 text-left">
+              <motion.div key="menu" initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} className="grid grid-cols-1 md:grid-cols-2 gap-4 w-full text-left">
+                <button onClick={crearDocumentoEnBlanco} className="bg-slate-900 text-white p-10 rounded-[3rem] text-left hover:bg-black transition-all group border-4 border-transparent hover:border-blue-500/20">
                    <div className="flex justify-between items-center text-left">
                       <div className="text-left"><span className="text-lg font-black uppercase italic block text-left">Documento Libre</span><span className="text-[10px] text-slate-400 font-bold uppercase tracking-widest text-left">Sin plantilla</span></div>
                       <PenTool className="text-blue-400" />
                    </div>
                 </button>
                 {categorias.map(cat => (
-                  <button key={cat.id} onClick={() => seleccionarPlantilla(cat)} className="bg-white p-10 rounded-[3rem] border border-slate-100 text-left hover:border-blue-500 transition-all shadow-xl font-black uppercase text-sm text-left">{cat.nombre_display}</button>
+                  <button key={cat.id} onClick={() => seleccionarPlantilla(cat)} className="bg-white p-10 rounded-[3rem] border border-slate-100 text-left hover:border-blue-500 transition-all shadow-xl font-black uppercase text-sm">{cat.nombre_display}</button>
                 ))}
               </motion.div>
             ) : docSeleccionado ? (
@@ -244,6 +250,7 @@ export default function DocumentosClinicosPage() {
                            <img 
                              src="https://yqdpmaopnvrgdqbfaiok.supabase.co/storage/v1/object/public/documentos_imagenes/440749454_122171956712064634_7168698893214813270_n.jpg" 
                              alt="Logo"
+                             referrerPolicy="no-referrer"
                              className="w-24 h-24 rounded-full object-cover print:w-28 print:h-28 shrink-0"
                            />
                            
@@ -268,14 +275,13 @@ export default function DocumentosClinicosPage() {
                               {docSeleccionado === 'NUEVO' && (
                                   <button onClick={() => setBloquesEdicion(prev => prev.filter(b => b.id !== bloque.id))} className="absolute -left-14 top-0 text-slate-300 opacity-0 group-hover:opacity-100 transition-all p-2 hover:text-red-500 print:hidden"><Trash2 size={18}/></button>
                               )}
-                              <RenderDinamico bloque={bloque} isReadOnly={docSeleccionado !== 'NUEVO'} onUpdate={(key, val) => {
+                              <RenderDinamico bloque={bloque} isReadOnly={docSeleccionado !== 'NUEVO'} onUpdate={(key: string, val: any) => {
                                   const n = [...bloquesEdicion]; n[idx][key] = val; setBloquesEdicion(n);
                               }}/>
                               </div>
                           ))}
                         </div>
 
-                        {/* FIRMAS ACTUALIZADAS */}
                         <div className="mt-20 pt-16 border-t border-slate-100 flex justify-between items-start gap-10 text-center">
                           <div className="flex flex-col items-center flex-1">
                               <div className="h-[1px] bg-slate-400 w-full max-w-[220px] mb-2"/>
@@ -304,7 +310,7 @@ export default function DocumentosClinicosPage() {
                     </div>
 
                     <div className="fixed bottom-10 right-10 flex flex-col gap-3 print:hidden">
-                       <button onClick={() => window.print()} className="bg-slate-900 text-white p-5 rounded-full shadow-2xl hover:scale-110 transition-all z-50 text-left"><Printer size={24}/></button>
+                       <button onClick={() => window.print()} className="bg-slate-900 text-white p-5 rounded-full shadow-2xl hover:scale-110 transition-all z-50"><Printer size={24}/></button>
                        {docSeleccionado === 'NUEVO' && (
                          <button 
                             onClick={guardarDocumentoFinal} 
@@ -319,7 +325,7 @@ export default function DocumentosClinicosPage() {
                 </div>
               </div>
             ) : (
-              <div key="empty" className="bg-slate-100 h-[700px] rounded-[4rem] border-2 border-dashed border-slate-200 flex flex-col items-center justify-center w-full text-center">
+              <div key="empty" className="bg-slate-100 h-[700px] rounded-[4rem] border-2 border-dashed border-slate-200 flex flex-col items-center justify-center w-full">
                 <FileText size={50} className="text-slate-300 mb-4" />
                 <p className="text-slate-400 font-black uppercase text-[11px] tracking-[0.3em] text-center">Seleccione un documento</p>
               </div>
@@ -343,36 +349,36 @@ export default function DocumentosClinicosPage() {
 }
 
 function RenderDinamico({ bloque, isReadOnly, onUpdate }: any) {
-  const inputStyle = "w-full p-4 bg-slate-50 rounded-2xl text-sm font-bold border-none outline-none transition-all print:bg-transparent print:p-0 print:mt-1 print:font-normal text-left";
+  const inputStyle = "w-full p-4 bg-slate-50 rounded-2xl text-sm font-bold border-none outline-none transition-all print:bg-transparent print:p-0 print:mt-1 print:font-normal text-left text-slate-900";
 
   switch (bloque.tipo) {
     case 'titulo':
-      return <textarea className="text-2xl font-black uppercase italic text-slate-800 w-full bg-transparent border-none outline-none focus:ring-0 p-0 text-left resize-none overflow-hidden text-left" value={bloque.contenido} rows={bloque.contenido.length > 30 ? 2 : 1} onChange={(e) => onUpdate('contenido', e.target.value)} readOnly={isReadOnly}/>
+      return <textarea className="text-2xl font-black uppercase italic text-slate-800 w-full bg-transparent border-none outline-none focus:ring-0 p-0 text-left resize-none overflow-hidden" value={bloque.contenido || ''} rows={(bloque.contenido || '').length > 30 ? 2 : 1} onChange={(e) => onUpdate('contenido', e.target.value)} readOnly={isReadOnly}/>
     case 'texto':
-      return <p className="text-sm text-slate-600 leading-relaxed text-justify whitespace-pre-line text-left break-words text-left">{bloque.contenido || '...'}</p>
+      return <p className="text-sm text-slate-600 leading-relaxed text-justify whitespace-pre-line text-left break-words">{bloque.contenido || '...'}</p>
     case 'separador':
       return <div className="h-[1px] bg-slate-200 w-full my-2"/>
     case 'input':
       return (
         <div className="text-left">
           <label className="text-[10px] font-black uppercase text-blue-600 print:text-slate-500 text-left">{bloque.label}</label>
-          <input className={inputStyle} value={bloque.valor_llenado} onChange={(e) => onUpdate('valor_llenado', e.target.value)} disabled={isReadOnly}/>
+          <input className={inputStyle} value={bloque.valor_llenado || ''} onChange={(e) => onUpdate('valor_llenado', e.target.value)} disabled={isReadOnly}/>
         </div>
       )
     case 'textarea':
       return (
         <div className="text-left">
           <label className="text-[10px] font-black uppercase text-blue-600 print:text-slate-500 text-left">{bloque.label}</label>
-          <textarea className={inputStyle} rows={3} value={bloque.valor_llenado} onChange={(e) => onUpdate('valor_llenado', e.target.value)} disabled={isReadOnly} style={{ resize: 'none' }}/>
+          <textarea className={inputStyle} rows={3} value={bloque.valor_llenado || ''} onChange={(e) => onUpdate('valor_llenado', e.target.value)} disabled={isReadOnly} style={{ resize: 'none' }}/>
         </div>
       )
     case 'desplegable':
       return (
         <div className="text-left">
           <label className="text-[10px] font-black uppercase text-blue-600 print:text-slate-500 text-left">{bloque.label}</label>
-          <div className="font-bold text-sm print:font-normal mt-1 text-left">{bloque.valor_llenado || '---'}</div>
+          <div className="font-bold text-sm print:font-normal mt-1 text-left text-slate-800">{bloque.valor_llenado || '---'}</div>
           {!isReadOnly && (
-            <select className={`${inputStyle} print:hidden text-left`} value={bloque.valor_llenado} onChange={(e) => onUpdate('valor_llenado', e.target.value)}>
+            <select className={`${inputStyle} print:hidden text-left cursor-pointer border-none`} value={bloque.valor_llenado || ''} onChange={(e) => onUpdate('valor_llenado', e.target.value)}>
               <option value="">Seleccionar...</option>
               {bloque.opciones?.map((o: any, i: number) => <option key={i} value={o}>{o}</option>)}
             </select>
@@ -403,7 +409,7 @@ function RenderDinamico({ bloque, isReadOnly, onUpdate }: any) {
         <div className="grid gap-6 text-left" style={{ gridTemplateColumns: `repeat(${bloque.columnas || 2}, 1fr)` }}>
           {(bloque.slots || []).map((slot: any, i: number) => (
             <div key={i} className="flex-1 text-left">
-              {slot ? <RenderDinamico bloque={slot} isReadOnly={isReadOnly} onUpdate={(k:string, v:any) => {
+              {slot ? <RenderDinamico bloque={slot} isReadOnly={isReadOnly} onUpdate={(k: string, v: any) => {
                 const n = [...bloque.slots]; n[i] = { ...n[i], [k]: v }; onUpdate('slots', n);
               }} /> : <div className="h-full border border-dashed border-slate-100 rounded-xl print:hidden min-h-[40px] text-left"/>}
             </div>
