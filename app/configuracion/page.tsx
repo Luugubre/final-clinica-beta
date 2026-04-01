@@ -29,22 +29,27 @@ export default function ConfiguracionPage() {
 
   const fetchPerfil = async () => {
     setLoading(true)
-    const { data: { session } } = await supabase.auth.getSession()
-    if (session) {
-      const { data } = await supabase
-        .from('profesionales')
-        .select('*, especialidades(nombre)')
-        .eq('user_id', session.user.id)
-        .single()
-      
-      if (data) {
-        setPerfil(data)
-        setNombre(data.nombre)
-        setApellido(data.apellido)
-        fetchEstadisticas(data.user_id)
+    try {
+      const { data: { session } } = await supabase.auth.getSession()
+      if (session) {
+        const { data } = await supabase
+          .from('profesionales')
+          .select('*, especialidades(nombre)')
+          .eq('user_id', session.user.id)
+          .maybeSingle() // Más seguro que .single() para el build
+        
+        if (data) {
+          setPerfil(data)
+          setNombre(data.nombre || '')
+          setApellido(data.apellido || '')
+          fetchEstadisticas(data.user_id)
+        }
       }
+    } catch (error) {
+      console.error(error)
+    } finally {
+      setLoading(false)
     }
-    setLoading(false)
   }
 
   const fetchEstadisticas = async (userId: string) => {
@@ -79,8 +84,11 @@ export default function ConfiguracionPage() {
     setGuardando(true)
     try {
       const { data: { session } } = await supabase.auth.getSession()
-      await supabase.from('profesionales').update({ nombre, apellido }).eq('user_id', session?.user.id)
-      await supabase.from('perfiles').update({ nombre_completo: `${nombre} ${apellido}` }).eq('id', session?.user.id)
+      if (!session) throw new Error("Sesión no encontrada")
+
+      await supabase.from('profesionales').update({ nombre, apellido }).eq('user_id', session.user.id)
+      await supabase.from('perfiles').update({ nombre_completo: `${nombre} ${apellido}` }).eq('id', session.user.id)
+      
       mostrarAviso('exito', 'Perfil actualizado correctamente')
       fetchPerfil()
     } catch (error: any) {
@@ -93,6 +101,7 @@ export default function ConfiguracionPage() {
   const handleCambiarPassword = async () => {
     if (newPassword.length < 6) return mostrarAviso('error', 'Mínimo 6 caracteres')
     if (newPassword !== confirmPassword) return mostrarAviso('error', 'Las contraseñas no coinciden')
+    
     setGuardando(true)
     const { error } = await supabase.auth.updateUser({ password: newPassword })
     if (error) mostrarAviso('error', error.message)
@@ -110,18 +119,18 @@ export default function ConfiguracionPage() {
   )
 
   return (
-    <div className="min-h-screen bg-[#F8FAFC] p-8 pb-20 font-sans">
+    <div className="min-h-screen bg-[#F8FAFC] p-8 pb-20 font-sans text-left">
       <div className="max-w-5xl mx-auto space-y-8">
         
         {/* HEADER */}
-        <header className="bg-white p-10 rounded-[3rem] shadow-sm border border-slate-100 flex items-center justify-between">
-          <div className="flex items-center gap-6">
+        <header className="bg-white p-10 rounded-[3rem] shadow-sm border border-slate-100 flex items-center justify-between text-left">
+          <div className="flex items-center gap-6 text-left">
             <div className="bg-slate-900 p-5 rounded-[2rem] text-white shadow-xl">
               <Settings size={32} />
             </div>
-            <div>
-              <h1 className="text-3xl font-black text-slate-800 uppercase italic leading-none">Configuración</h1>
-              <p className="text-slate-400 text-[10px] font-bold uppercase tracking-[0.3em] mt-3">Panel Personal de Trabajo</p>
+            <div className="text-left">
+              <h1 className="text-3xl font-black text-slate-800 uppercase italic leading-none text-left">Configuración</h1>
+              <p className="text-slate-400 text-[10px] font-bold uppercase tracking-[0.3em] mt-3 text-left">Panel Personal de Trabajo</p>
             </div>
           </div>
           <div className="hidden md:flex items-center gap-2 bg-blue-50 px-6 py-3 rounded-2xl border border-blue-100">
@@ -155,31 +164,31 @@ export default function ConfiguracionPage() {
           />
         </div>
 
-        <div className="grid grid-cols-1 md:grid-cols-3 gap-8">
+        <div className="grid grid-cols-1 md:grid-cols-3 gap-8 text-left">
           {/* COLUMNA IZQUIERDA: PERFIL */}
-          <div className="md:col-span-1 space-y-6">
+          <div className="md:col-span-1 space-y-6 text-center">
             <div className="bg-white p-8 rounded-[2.5rem] border border-slate-100 shadow-sm text-center">
               <div className="w-24 h-24 bg-slate-50 rounded-3xl flex items-center justify-center text-blue-600 mx-auto mb-4 shadow-inner">
                 <User size={48} />
               </div>
               <h3 className="text-xl font-black text-slate-800 uppercase leading-tight">{perfil?.nombre} {perfil?.apellido}</h3>
               <span className="inline-block bg-blue-50 text-blue-600 text-[9px] font-black uppercase px-3 py-1 rounded-full mt-2">
-                {perfil?.especialidades?.nombre || 'General'}
+                {(perfil?.especialidades as any)?.nombre || 'General'}
               </span>
               <div className="mt-8 pt-6 border-t border-slate-50">
                  <p className="text-[10px] font-black text-slate-400 uppercase italic tracking-widest">ID Profesional</p>
-                 <p className="text-xs font-bold text-slate-600 mt-1">{perfil?.user_id.substring(0,13)}...</p>
+                 <p className="text-xs font-bold text-slate-600 mt-1">{perfil?.user_id?.substring(0,13)}...</p>
               </div>
             </div>
           </div>
 
           {/* COLUMNA DERECHA: FORMULARIOS */}
-          <div className="md:col-span-2 space-y-8">
-            <section className="bg-white p-10 rounded-[3rem] border border-slate-100 shadow-sm space-y-8">
-              <h2 className="text-lg font-black text-slate-800 uppercase italic flex items-center gap-3">
+          <div className="md:col-span-2 space-y-8 text-left">
+            <section className="bg-white p-10 rounded-[3rem] border border-slate-100 shadow-sm space-y-8 text-left">
+              <h2 className="text-lg font-black text-slate-800 uppercase italic flex items-center gap-3 text-left">
                 <div className="w-1.5 h-6 bg-blue-600 rounded-full" /> Datos Personales
               </h2>
-              <div className="grid grid-cols-2 gap-6">
+              <div className="grid grid-cols-2 gap-6 text-left">
                 <Input label="Nombre" value={nombre} onChange={setNombre} />
                 <Input label="Apellido" value={apellido} onChange={setApellido} />
               </div>
@@ -188,11 +197,11 @@ export default function ConfiguracionPage() {
               </button>
             </section>
 
-            <section className="bg-white p-10 rounded-[3rem] border border-slate-100 shadow-sm space-y-8">
-              <h2 className="text-lg font-black text-slate-800 uppercase italic flex items-center gap-3">
+            <section className="bg-white p-10 rounded-[3rem] border border-slate-100 shadow-sm space-y-8 text-left">
+              <h2 className="text-lg font-black text-slate-800 uppercase italic flex items-center gap-3 text-left">
                 <div className="w-1.5 h-6 bg-red-500 rounded-full" /> Seguridad de Acceso
               </h2>
-              <div className="grid grid-cols-2 gap-6">
+              <div className="grid grid-cols-2 gap-6 text-left">
                 <Input label="Nueva Contraseña" type="password" value={newPassword} onChange={setNewPassword} />
                 <Input label="Confirmar Contraseña" type="password" value={confirmPassword} onChange={setConfirmPassword} />
               </div>
@@ -221,14 +230,14 @@ function StatCard({ label, value, icon, color, bg }: any) {
   return (
     <motion.div 
       initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }}
-      className="bg-white p-6 rounded-[2.5rem] border border-slate-100 shadow-sm flex items-center gap-6"
+      className="bg-white p-6 rounded-[2.5rem] border border-slate-100 shadow-sm flex items-center gap-6 text-left"
     >
       <div className={`${bg} ${color} p-4 rounded-[1.5rem] shadow-inner`}>
         {icon}
       </div>
-      <div>
-        <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-1">{label}</p>
-        <p className={`text-2xl font-black ${color} leading-none`}>{value}</p>
+      <div className="text-left">
+        <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-1 text-left">{label}</p>
+        <p className={`text-2xl font-black ${color} leading-none text-left`}>{value}</p>
       </div>
     </motion.div>
   )
@@ -236,10 +245,14 @@ function StatCard({ label, value, icon, color, bg }: any) {
 
 function Input({ label, value, onChange, type = "text" }: any) {
   return (
-    <div className="space-y-2">
-      <label className="text-[10px] font-black text-slate-400 uppercase ml-2 tracking-widest italic">{label}</label>
-      <input type={type} value={value} onChange={(e) => onChange(e.target.value)} 
-        className="w-full bg-slate-50 p-5 rounded-2xl text-xs font-bold outline-none focus:ring-2 ring-blue-500/20 focus:bg-white transition-all shadow-inner border-none" />
+    <div className="space-y-2 text-left">
+      <label className="text-[10px] font-black text-slate-400 uppercase ml-2 tracking-widest italic text-left">{label}</label>
+      <input 
+        type={type} 
+        value={value || ''} 
+        onChange={(e) => onChange(e.target.value)} 
+        className="w-full bg-slate-50 p-5 rounded-2xl text-xs font-bold outline-none focus:ring-2 ring-blue-500/20 focus:bg-white transition-all shadow-inner border-none text-slate-900" 
+      />
     </div>
   )
 }
