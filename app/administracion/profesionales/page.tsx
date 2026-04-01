@@ -1,7 +1,7 @@
 'use client'
 import { useState, useEffect } from 'react'
 import { supabase } from '@/lib/supabase'
-import { crearCuentaStaff, actualizarCuentaStaff, eliminarCuentaStaff } from './actions' 
+import { crearCuentaStaff, actualizarCuentaStaff, eliminarCuentaStaff } from '../actions' 
 import { 
   Plus, Search, Lock, Trash2, Stethoscope, X, Save, 
   Loader2, UserCircle, KeyRound, UserCog, ShieldCheck, AtSign, Fingerprint
