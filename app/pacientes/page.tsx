@@ -38,16 +38,19 @@ export default function ListaPacientes() {
       
       if (error) throw error
 
-      const procesados = data.map(p => {
-        const totalTratamientos = p.presupuestos?.length || 0
-        const totalDeuda = p.presupuestos?.reduce((acc: number, pres: any) => 
+      const procesados = (data || []).map(p => {
+        // CORRECCIÓN: Forzamos el tipo presupuestos como lista para el reduce
+        const listaPresupuestos = (p.presupuestos as any[]) || []
+        const totalTratamientos = listaPresupuestos.length
+        
+        const totalDeuda = listaPresupuestos.reduce((acc: number, pres: any) => 
           acc + (Number(pres.total || 0) - Number(pres.total_abonado || 0)), 0) || 0
         
         return { 
           ...p, 
           totalTratamientos, 
           totalDeuda,
-          activo: p.activo ?? true // Si es null en la BD, asumimos true
+          activo: p.activo ?? true 
         }
       })
       
@@ -62,7 +65,9 @@ export default function ListaPacientes() {
 
   const toggleEstadoPaciente = async (id: string, estadoActual: boolean, nombre: string) => {
     const accion = estadoActual ? 'restringir' : 'rehabilitar'
-    if (confirm(`¿Deseas ${accion} a ${nombre}?`)) {
+    
+    // CORRECCIÓN: Uso seguro de confirm para el Build
+    if (typeof window !== 'undefined' && window.confirm(`¿Deseas ${accion} a ${nombre}?`)) {
       const { error } = await supabase
         .from('pacientes')
         .update({ activo: !estadoActual })
@@ -78,7 +83,7 @@ export default function ListaPacientes() {
   }
 
   const handleEliminar = async (id: string, nombre: string) => {
-    if (confirm(`¿Eliminar permanentemente a ${nombre}? Esta acción es irreversible.`)) {
+    if (typeof window !== 'undefined' && window.confirm(`¿Eliminar permanentemente a ${nombre}? Esta acción es irreversible.`)) {
       const { error } = await supabase.from('pacientes').delete().eq('id', id)
       if (error) toast.error("Error: " + error.message)
       else {
@@ -102,16 +107,16 @@ export default function ListaPacientes() {
   )
 
   return (
-    <main className="p-10 max-w-7xl mx-auto min-h-screen bg-[#FDFDFD] font-sans text-slate-800">
+    <main className="p-10 max-w-7xl mx-auto min-h-screen bg-[#FDFDFD] font-sans text-slate-800 text-left">
       
       {/* HEADER PREMIUM */}
-      <header className="flex flex-col md:flex-row justify-between items-start md:items-center mb-12 gap-8">
-        <div className="space-y-2">
-          <Link href="/" className="group flex items-center gap-2 text-slate-400 font-black text-[10px] uppercase tracking-widest hover:text-blue-600 transition-all">
+      <header className="flex flex-col md:flex-row justify-between items-start md:items-center mb-12 gap-8 text-left">
+        <div className="space-y-2 text-left">
+          <Link href="/" className="group flex items-center gap-2 text-slate-400 font-black text-[10px] uppercase tracking-widest hover:text-blue-600 transition-all text-left">
             <div className="p-2 bg-slate-100 rounded-lg group-hover:bg-blue-50 transition-colors"><ArrowLeft size={14} /></div>
             Panel de Control
           </Link>
-          <h1 className="text-5xl font-black text-slate-900 tracking-tighter uppercase leading-none">
+          <h1 className="text-5xl font-black text-slate-900 tracking-tighter uppercase leading-none text-left">
             {verDeshabilitados ? 'Usuarios' : 'Directorio'} <br />
             <span className={verDeshabilitados ? 'text-red-500' : 'text-blue-600'}>
               {verDeshabilitados ? 'Restringidos' : 'Pacientes'}
@@ -140,18 +145,18 @@ export default function ListaPacientes() {
       </header>
 
       {/* BUSCADOR */}
-      <div className="relative mb-12 group">
+      <div className="relative mb-12 group text-left">
         <Search className="absolute left-6 top-1/2 -translate-y-1/2 text-slate-300 group-focus-within:text-blue-500 transition-colors" size={22} />
         <input 
           type="text" 
           placeholder={verDeshabilitados ? "BUSCAR EN LISTA NEGRA..." : "BUSCAR POR NOMBRE, RUT O ID..."}
-          className="w-full p-7 pl-16 bg-white border border-slate-100 rounded-[2.5rem] shadow-xl shadow-slate-100/50 outline-none focus:ring-4 ring-blue-50 transition-all font-bold text-sm"
+          className="w-full p-7 pl-16 bg-white border border-slate-100 rounded-[2.5rem] shadow-xl shadow-slate-100/50 outline-none focus:ring-4 ring-blue-50 transition-all font-bold text-sm text-slate-900"
           onChange={(e) => setBusqueda(e.target.value)}
         />
       </div>
 
       {/* LISTADO DE FICHAS */}
-      <div className="grid grid-cols-1 gap-4">
+      <div className="grid grid-cols-1 gap-4 text-left">
         <AnimatePresence mode='popLayout'>
           {pacientesFiltrados.map((p) => (
             <motion.div 
@@ -163,38 +168,38 @@ export default function ListaPacientes() {
               className={`group bg-white p-2 pl-8 rounded-[3rem] border border-slate-100 flex flex-col md:flex-row items-center justify-between hover:border-blue-200 hover:shadow-2xl transition-all duration-500 ${!p.activo ? 'bg-slate-50/50 grayscale-[0.5]' : ''}`}
             >
               {/* INFO PRINCIPAL */}
-              <div className="flex items-center gap-8 py-4">
+              <div className="flex items-center gap-8 py-4 text-left w-full md:w-auto">
                 <div className={`hidden md:flex flex-col items-center justify-center w-16 h-16 rounded-[1.5rem] border border-slate-100 transition-all duration-500 ${!p.activo ? 'bg-red-50 text-red-400' : 'bg-slate-50 group-hover:bg-blue-600 group-hover:text-white text-slate-300'}`}>
                   <User size={24} />
                 </div>
                 
-                <div className="space-y-1">
-                  <div className="flex items-center gap-2">
+                <div className="space-y-1 text-left">
+                  <div className="flex items-center gap-2 text-left">
                      <span className={`text-[10px] font-black px-2 py-0.5 rounded-md uppercase tracking-tighter ${!p.activo ? 'bg-red-500 text-white' : 'bg-blue-50 text-blue-500'}`}>
                         ID: {p.rut?.split('-')[0] || '---'}
                      </span>
-                     <h4 className="font-black text-slate-900 text-xl uppercase tracking-tighter">{p.nombre} {p.apellido}</h4>
+                     <h4 className="font-black text-slate-900 text-xl uppercase tracking-tighter text-left">{p.nombre} {p.apellido}</h4>
                   </div>
-                  <div className="flex items-center gap-4 text-slate-400 font-bold text-[10px] uppercase tracking-widest">
-                    <span className="flex items-center gap-1"><Hash size={12} /> {p.rut}</span>
-                    {p.telefono && <span className="flex items-center gap-1"><Phone size={12} /> {p.telefono}</span>}
+                  <div className="flex items-center gap-4 text-slate-400 font-bold text-[10px] uppercase tracking-widest text-left">
+                    <span className="flex items-center gap-1 text-left"><Hash size={12} /> {p.rut}</span>
+                    {p.telefono && <span className="flex items-center gap-1 text-left"><Phone size={12} /> {p.telefono}</span>}
                   </div>
                 </div>
               </div>
 
               {/* INDICADORES FINANCIEROS */}
-              <div className="flex flex-wrap items-center gap-3 md:gap-6 px-6 py-4">
-                 <div className="bg-slate-50 px-5 py-3 rounded-2xl border border-slate-100 min-w-[120px]">
-                    <p className="text-[8px] font-black text-slate-400 uppercase tracking-widest mb-1 flex items-center gap-1"><Activity size={10}/> Presupuestos</p>
-                    <p className="text-sm font-black text-slate-700">{p.totalTratamientos} <span className="text-[10px] text-slate-300">TOTAL</span></p>
+              <div className="flex flex-wrap items-center gap-3 md:gap-6 px-6 py-4 text-left">
+                 <div className="bg-slate-50 px-5 py-3 rounded-2xl border border-slate-100 min-w-[120px] text-left">
+                    <p className="text-[8px] font-black text-slate-400 uppercase tracking-widest mb-1 flex items-center gap-1 text-left"><Activity size={10}/> Presupuestos</p>
+                    <p className="text-sm font-black text-slate-700 text-left">{p.totalTratamientos} <span className="text-[10px] text-slate-300">TOTAL</span></p>
                  </div>
                  
-                 <div className={`px-5 py-3 rounded-2xl border min-w-[140px] transition-colors duration-500 ${p.totalDeuda > 0 ? 'bg-red-50 border-red-100' : 'bg-emerald-50 border-emerald-100'}`}>
-                    <p className={`text-[8px] font-black uppercase tracking-widest mb-1 flex items-center gap-1 ${p.totalDeuda > 0 ? 'text-red-400' : 'text-emerald-500'}`}>
+                 <div className={`px-5 py-3 rounded-2xl border min-w-[140px] transition-colors duration-500 ${p.totalDeuda > 0 ? 'bg-red-50 border-red-100' : 'bg-emerald-50 border-emerald-100'} text-left`}>
+                    <p className={`text-[8px] font-black uppercase tracking-widest mb-1 flex items-center gap-1 ${p.totalDeuda > 0 ? 'text-red-400' : 'text-emerald-500'} text-left`}>
                       <CreditCard size={10}/> {p.totalDeuda > 0 ? 'Saldo Pendiente' : 'Al día'}
                     </p>
-                    <p className={`text-sm font-black ${p.totalDeuda > 0 ? 'text-red-600' : 'text-emerald-600'}`}>
-                      ${p.totalDeuda.toLocaleString('es-CL')}
+                    <p className={`text-sm font-black ${p.totalDeuda > 0 ? 'text-red-600' : 'text-emerald-600'} text-left`}>
+                      ${Number(p.totalDeuda || 0).toLocaleString('es-CL')}
                     </p>
                  </div>
 
