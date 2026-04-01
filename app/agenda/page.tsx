@@ -10,6 +10,16 @@ import { motion, AnimatePresence } from 'framer-motion'
 import { toast } from 'sonner' 
 import Link from 'next/link'
 
+// Definición de la interfaz para el nuevo paciente para evitar errores de TS
+interface NuevoPaciente {
+  nombre: string;
+  apellido: string;
+  rut: string;
+  telefono: string;
+  fecha_nacimiento: string;
+  sexo: string;
+}
+
 export default function AgendaPage() {
   // --- ESTADOS VISTA PRINCIPAL ---
   const [selectedDate, setSelectedDate] = useState(new Date())
@@ -29,7 +39,17 @@ export default function AgendaPage() {
 
   // --- ESTADOS PACIENTE / TICKET ---
   const [modoNuevoPaciente, setModoNuevoPaciente] = useState(false)
-  const [nuevoPaciente, setNuevoPaciente] = useState({ nombre: '', apellido: '', rut: '', fecha_nacimiento: '', sexo: '' })
+  
+  // SOLUCIÓN AL ERROR DE TYPESCRIPT: Se inicializa con todos los campos requeridos
+  const [nuevoPaciente, setNuevoPaciente] = useState<NuevoPaciente>({ 
+    nombre: '', 
+    apellido: '', 
+    rut: '', 
+    telefono: '', 
+    fecha_nacimiento: '', 
+    sexo: '' 
+  })
+
   const [busqueda, setBusqueda] = useState('')
   const [pacientesEncontrados, setPacientesEncontrados] = useState<any[]>([])
   const [pacienteSeleccionado, setPacienteSeleccionado] = useState<any>(null)
@@ -158,6 +178,7 @@ export default function AgendaPage() {
           nombre: nuevoPaciente.nombre.toUpperCase().trim(), 
           apellido: nuevoPaciente.apellido.toUpperCase().trim(), 
           rut: rutLimpio,
+          telefono: nuevoPaciente.telefono,
           fecha_nacimiento: nuevoPaciente.fecha_nacimiento,
           sexo: nuevoPaciente.sexo,
           activo: true
@@ -214,9 +235,7 @@ export default function AgendaPage() {
     }
   }
 
-  // --- FUNCIÓN REGISTRAR LLEGADA CON BROADCAST ---
   const registrarLlegada = async (citaId: string) => {
-    // 1. Actualizar DB
     const { data: citaActualizada, error } = await supabase
       .from('citas')
       .update({ 
@@ -230,7 +249,6 @@ export default function AgendaPage() {
 
     if (error) return toast.error("Error al registrar llegada");
 
-    // 2. Enviar Broadcast al Dentista (Canal dinámico)
     const canal = supabase.channel(`dentista-${citaActualizada.profesional_id}`);
     
     await canal.subscribe(async (status) => {
@@ -242,7 +260,6 @@ export default function AgendaPage() {
             nombre: `${citaActualizada.pacientes.nombre} ${citaActualizada.pacientes.apellido}` 
           },
         });
-        // Cerramos el canal temporal de envío
         supabase.removeChannel(canal);
       }
     });
@@ -271,6 +288,7 @@ export default function AgendaPage() {
     setPaso(1); setHorasSeleccionadas([]); setPacienteSeleccionado(null); setBusqueda('');
     setModoNuevoPaciente(false); setNuevoTratamientoNombre(''); setCitasOcupadas([]);
     setTratamientoSeleccionadoId(null); setTratamientosPaciente([]);
+    // CORRECCIÓN: Reset con el campo telefono incluido
     setNuevoPaciente({ nombre: '', apellido: '', rut: '', telefono: '', fecha_nacimiento: '', sexo: '' });
   }
 
@@ -293,7 +311,7 @@ export default function AgendaPage() {
 
   return (
     <div className="flex h-screen bg-[#FDFDFD] overflow-hidden font-sans text-slate-800">
-      <main className="flex-1 flex flex-col overflow-hidden">
+      <main className="flex-1 flex flex-col overflow-hidden text-left">
         <header className="bg-white/80 backdrop-blur-md border-b border-slate-100 px-10 py-6 flex items-center justify-between sticky top-0 z-30 shadow-sm">
           <div className="flex items-center gap-10">
             <div className="space-y-1 text-left">
@@ -357,15 +375,15 @@ export default function AgendaPage() {
         </div>
       </main>
 
-      {/* MODAL Y TICKET (OMITIDOS PARA BREVEDAD, MANTIENEN TU LÓGICA ORIGINAL) */}
+      {/* MODAL AGENDAMIENTO */}
       <AnimatePresence>
         {modalAbierto && (
           <div className="fixed inset-0 z-[1000] flex items-end justify-center p-4 md:p-8 bg-slate-900/60 backdrop-blur-md">
-            <motion.div initial={{ scale: 0.95, opacity: 0, y: 20 }} animate={{ scale: 1, opacity: 1, y: 0 }} exit={{ scale: 0.95, opacity: 0, y: 20 }} className="bg-white w-full max-w-7xl h-full max-h-[85vh] rounded-[3.5rem] shadow-2xl flex flex-col overflow-hidden relative text-slate-900">
+            <motion.div initial={{ scale: 0.95, opacity: 0, y: 20 }} animate={{ scale: 1, opacity: 1, y: 0 }} exit={{ scale: 0.95, opacity: 0, y: 20 }} className="bg-white w-full max-w-7xl h-full max-h-[85vh] rounded-[3.5rem] shadow-2xl flex flex-col overflow-hidden relative text-slate-900 text-left">
               <div className="p-8 border-b border-slate-50 bg-white flex justify-between items-center shrink-0">
                 <div className="flex items-center gap-6">
                   <div className="p-4 rounded-3xl bg-blue-500 text-white shadow-xl shadow-blue-100"><CalendarDays size={28} /></div>
-                  <div className="text-slate-900 text-left">
+                  <div className="text-slate-900">
                     <h2 className="font-black uppercase text-lg tracking-tight mb-1 leading-none">Reserva de Horas</h2>
                     <p className="text-[10px] font-bold text-slate-400 uppercase tracking-widest italic">Paso {paso} de 2</p>
                   </div>
@@ -376,7 +394,7 @@ export default function AgendaPage() {
               <div className="flex flex-1 overflow-hidden">
                 {paso === 1 ? (
                   <>
-                    <aside className="w-[320px] border-r border-slate-50 p-10 bg-[#FAFBFC]/50 space-y-8 overflow-y-auto hidden md:block text-left">
+                    <aside className="w-[320px] border-r border-slate-50 p-10 bg-[#FAFBFC]/50 space-y-8 overflow-y-auto hidden md:block">
                       <div className="bg-slate-900 p-8 rounded-[2.5rem] text-white shadow-2xl">
                         <p className="text-[10px] font-bold uppercase mb-2 opacity-50 tracking-widest">Seleccionadas</p>
                         <p className="text-5xl font-black leading-none">{horasSeleccionadas.length}</p>
@@ -396,7 +414,7 @@ export default function AgendaPage() {
                         </div>
                       </div>
                     </aside>
-                    <main className="flex-1 p-6 md:p-10 grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-3 md:gap-5 bg-white overflow-y-auto text-slate-900">
+                    <main className="flex-1 p-6 md:p-10 grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-3 md:gap-5 bg-white overflow-y-auto">
                       {getDiasLunesSabado().map(dia => {
                         const fStr = dia.toLocaleDateString('sv-SE');
                         return (
@@ -424,8 +442,8 @@ export default function AgendaPage() {
                     </main>
                   </>
                 ) : (
-                  <div className="flex-1 flex flex-col md:flex-row overflow-hidden bg-white text-slate-900">
-                    <div className="w-full md:w-1/2 border-r border-slate-50 p-8 md:p-12 bg-[#FAFBFC]/50 overflow-y-auto space-y-6 text-left">
+                  <div className="flex-1 flex flex-col md:flex-row overflow-hidden bg-white">
+                    <div className="w-full md:w-1/2 border-r border-slate-50 p-8 md:p-12 bg-[#FAFBFC]/50 overflow-y-auto space-y-6">
                        <h3 className="text-sm font-black uppercase text-blue-600 flex items-center gap-2"><Timer size={18}/> Ajustar Tiempos</h3>
                        {horasSeleccionadas.map((s, idx) => (
                          <div key={idx} className="bg-white p-7 rounded-[2rem] border border-slate-100 flex items-center justify-between shadow-sm">
@@ -436,7 +454,7 @@ export default function AgendaPage() {
                          </div>
                        ))}
                     </div>
-                    <div className="w-full md:w-1/2 p-8 md:p-12 overflow-y-auto space-y-10 text-left">
+                    <div className="w-full md:w-1/2 p-8 md:p-12 overflow-y-auto space-y-10">
                       <div className="flex flex-col gap-2">
                         <div className="flex items-center justify-between mb-4 px-2">
                             <h3 className="text-sm font-black uppercase text-slate-800 tracking-tight">{modoNuevoPaciente ? 'Nuevo Registro' : 'Vincular Paciente'}</h3>
@@ -447,6 +465,8 @@ export default function AgendaPage() {
                               <input placeholder="Nombre" className="p-5 bg-white rounded-2xl font-bold text-xs uppercase outline-none text-slate-900 shadow-sm" value={nuevoPaciente.nombre} onChange={e => setNuevoPaciente(prev => ({...prev, nombre: e.target.value}))}/>
                               <input placeholder="Apellido" className="p-5 bg-white rounded-2xl font-bold text-xs uppercase outline-none text-slate-900 shadow-sm" value={nuevoPaciente.apellido} onChange={e => setNuevoPaciente(prev => ({...prev, apellido: e.target.value}))}/>
                               <input placeholder="RUT" className="p-5 bg-white rounded-2xl font-bold text-xs uppercase outline-none text-slate-900 shadow-sm" value={nuevoPaciente.rut} onChange={e => setNuevoPaciente(prev => ({...prev, rut: e.target.value}))}/>
+                              {/* Campo de Teléfono añadido */}
+                              <input placeholder="Teléfono" className="p-5 bg-white rounded-2xl font-bold text-xs uppercase outline-none text-slate-900 shadow-sm" value={nuevoPaciente.telefono} onChange={e => setNuevoPaciente(prev => ({...prev, telefono: e.target.value}))}/>
                               <div className="grid grid-cols-2 gap-4">
                                 <div className="space-y-1">
                                   <label className="text-[9px] font-black text-slate-400 uppercase ml-3">Nacimiento</label>
