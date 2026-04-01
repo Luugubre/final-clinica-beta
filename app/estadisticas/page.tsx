@@ -9,6 +9,7 @@ import Link from 'next/link'
 
 export default function EstadisticasPage() {
   const [loading, setLoading] = useState(true)
+  const [mounted, setMounted] = useState(false) // Control de hidratación
   const [data, setData] = useState({
     ingresosMes: 0,
     citasMes: 0,
@@ -18,46 +19,55 @@ export default function EstadisticasPage() {
   })
 
   useEffect(() => {
+    setMounted(true)
     fetchStats()
   }, [])
 
   async function fetchStats() {
-    const ahora = new Date()
-    const inicioMes = new Date(ahora.getFullYear(), ahora.getMonth(), 1).toISOString()
-    
-    const { data: pagos } = await supabase
-      .from('pagos')
-      .select('monto, fecha_pago')
-      .gte('fecha_pago', inicioMes)
+    try {
+      const ahora = new Date()
+      const inicioMes = new Date(ahora.getFullYear(), ahora.getMonth(), 1).toISOString()
+      
+      const { data: pagos } = await supabase
+        .from('pagos')
+        .select('monto, fecha_pago')
+        .gte('fecha_pago', inicioMes)
 
-    const { count: totalCitas } = await supabase
-      .from('citas')
-      .select('*', { count: 'exact', head: true })
-      .gte('inicio', inicioMes)
+      const { count: totalCitas } = await supabase
+        .from('citas')
+        .select('*', { count: 'exact', head: true })
+        .gte('inicio', inicioMes)
 
-    const { count: totalPacientes } = await supabase
-      .from('pacientes')
-      .select('*', { count: 'exact', head: true })
+      const { count: totalPacientes } = await supabase
+        .from('pacientes')
+        .select('*', { count: 'exact', head: true })
 
-    const sumaIngresos = pagos?.reduce((acc, curr) => acc + Number(curr.monto), 0) || 0
+      // CORRECCIÓN: Tipado en el reduce
+      const sumaIngresos = pagos?.reduce((acc: number, curr: any) => acc + Number(curr.monto || 0), 0) || 0
 
-    const dias = ['Lun', 'Mar', 'Mie', 'Jue', 'Vie', 'Sab']
-    const graficoData = dias.map(d => ({
-        dia: d,
-        valor: Math.floor(Math.random() * 500000) + 100000
-    }))
+      const dias = ['Lun', 'Mar', 'Mie', 'Jue', 'Vie', 'Sab']
+      // CORRECCIÓN: Los datos aleatorios solo se generan si estamos en el cliente
+      const graficoData = dias.map(d => ({
+          dia: d,
+          valor: Math.floor(Math.random() * 500000) + 100000
+      }))
 
-    setData({
-      ingresosMes: sumaIngresos,
-      citasMes: totalCitas || 0,
-      pacientesTotales: totalPacientes || 0,
-      crecimiento: 12.5,
-      ingresosPorDia: graficoData
-    })
-    setLoading(false)
+      setData({
+        ingresosMes: sumaIngresos,
+        citasMes: totalCitas || 0,
+        pacientesTotales: totalPacientes || 0,
+        crecimiento: 12.5,
+        ingresosPorDia: graficoData
+      })
+    } catch (error) {
+      console.error("Error cargando estadísticas:", error)
+    } finally {
+      setLoading(false)
+    }
   }
 
-  if (loading) return (
+  // Si no está montado o está cargando, mostramos el loader profesional
+  if (!mounted || loading) return (
     <div className="p-20 text-center flex flex-col items-center justify-center min-h-screen bg-slate-50">
       <Clock className="animate-spin text-blue-600 mb-4" size={48} />
       <p className="text-slate-400 font-black animate-pulse uppercase tracking-widest text-xs">Analizando Datos...</p>
@@ -65,18 +75,18 @@ export default function EstadisticasPage() {
   )
 
   return (
-    <main className="p-4 lg:p-12 max-w-7xl mx-auto bg-slate-50 min-h-screen text-slate-900">
+    <main className="p-4 lg:p-12 max-w-7xl mx-auto bg-slate-50 min-h-screen text-slate-900 text-left">
       
-      <header className="flex justify-between items-center mb-12">
-        <div>
+      <header className="flex flex-col md:flex-row justify-between items-start md:items-center mb-12 gap-6">
+        <div className="text-left">
           <Link href="/" className="text-slate-400 font-bold text-xs uppercase tracking-widest flex items-center gap-2 mb-4 hover:text-blue-600 transition-all">
             <ArrowLeft size={16} /> Volver al Panel
           </Link>
-          <h1 className="text-5xl font-black tracking-tighter text-slate-900 leading-none">Estadísticas</h1>
-          <p className="text-slate-500 font-medium mt-2">Rendimiento mensual de la clínica.</p>
+          <h1 className="text-5xl font-black tracking-tighter text-slate-900 leading-none text-left">Estadísticas</h1>
+          <p className="text-slate-500 font-medium mt-2 text-left">Rendimiento mensual de la clínica.</p>
         </div>
-        <div className="hidden md:block bg-white p-6 rounded-[2rem] shadow-sm border border-slate-100">
-            <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest">Crecimiento</p>
+        <div className="bg-white p-6 rounded-[2rem] shadow-sm border border-slate-100 text-left">
+            <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest text-left">Crecimiento</p>
             <div className="flex items-center gap-2 text-emerald-500 font-black text-2xl">
                 +{data.crecimiento}% <TrendingUp size={24}/>
             </div>
@@ -89,9 +99,9 @@ export default function EstadisticasPage() {
         <StatCard label="Total Pacientes" valor={data.pacientesTotales.toString()} icon={<Users/>} color="bg-purple-600" />
       </div>
 
-      <div className="grid grid-cols-1 lg:grid-cols-2 gap-10">
-        <section className="bg-white p-10 rounded-[3rem] shadow-xl border border-slate-100">
-          <h3 className="text-2xl font-black mb-10 flex items-center gap-3">
+      <div className="grid grid-cols-1 lg:grid-cols-2 gap-10 text-left">
+        <section className="bg-white p-10 rounded-[3rem] shadow-xl border border-slate-100 text-left">
+          <h3 className="text-2xl font-black mb-10 flex items-center gap-3 text-left">
             <BarChart3 className="text-blue-600" /> Flujo de Caja Semanal
           </h3>
           <div className="flex items-end justify-between h-64 gap-4 px-4">
@@ -108,10 +118,10 @@ export default function EstadisticasPage() {
           </div>
         </section>
 
-        <section className="space-y-8">
-            <div className="bg-slate-900 rounded-[3rem] p-10 text-white relative overflow-hidden">
+        <section className="space-y-8 text-left">
+            <div className="bg-slate-900 rounded-[3rem] p-10 text-white relative overflow-hidden text-left">
                 <div className="absolute top-0 right-0 p-8 opacity-10"><PieChart size={120}/></div>
-                <h3 className="text-xl font-black mb-8">Top Tratamientos</h3>
+                <h3 className="text-xl font-black mb-8 text-left">Top Tratamientos</h3>
                 <div className="space-y-6">
                     <ProgressItem label="Limpiezas" porcentaje={75} color="bg-blue-500" />
                     <ProgressItem label="Extracciones" porcentaje={40} color="bg-emerald-500" />
@@ -126,11 +136,11 @@ export default function EstadisticasPage() {
 
 function StatCard({ label, valor, icon, color }: any) {
   return (
-    <div className="bg-white p-8 rounded-[2.5rem] shadow-sm border border-slate-100 flex items-center gap-6 group hover:shadow-xl transition-all">
+    <div className="bg-white p-8 rounded-[2.5rem] shadow-sm border border-slate-100 flex items-center gap-6 group hover:shadow-xl transition-all text-left">
       <div className={`${color} p-5 rounded-[1.8rem] text-white shadow-lg`}>{icon}</div>
-      <div>
-        <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-1">{label}</p>
-        <p className="text-3xl font-black text-slate-900 tracking-tighter">{valor}</p>
+      <div className="text-left">
+        <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-1 text-left">{label}</p>
+        <p className="text-3xl font-black text-slate-900 tracking-tighter text-left">{valor}</p>
       </div>
     </div>
   )
@@ -138,10 +148,10 @@ function StatCard({ label, valor, icon, color }: any) {
 
 function ProgressItem({ label, porcentaje, color }: any) {
     return (
-        <div className="space-y-2">
+        <div className="space-y-2 text-left">
             <div className="flex justify-between text-[10px] font-black uppercase tracking-widest">
                 <span className="text-slate-400">{label}</span>
-                <span>{porcentaje}%</span>
+                <span className="text-white">{porcentaje}%</span>
             </div>
             <div className="h-2 bg-white/10 rounded-full overflow-hidden">
                 <div className={`h-full ${color} rounded-full transition-all duration-1000`} style={{ width: `${porcentaje}%` }}></div>
