@@ -1,5 +1,5 @@
 'use client'
-import { useState, useEffect, useMemo } from 'react'
+import { useState, useEffect } from 'react'
 import { useRouter } from 'next/navigation'
 import { supabase } from '@/lib/supabase'
 import { 
@@ -34,7 +34,7 @@ export default function GestionCajasPage() {
           .from('perfiles')
           .select('nombre_completo')
           .eq('id', user.id)
-          .single()
+          .maybeSingle() // Cambiado de single a maybeSingle para evitar errores si no hay perfil
 
         setResponsable(perfil?.nombre_completo || user.user_metadata?.nombre_completo || user.email || 'Recepcionista')
       }
@@ -63,8 +63,9 @@ export default function GestionCajasPage() {
       
       if (errCe) throw errCe
       
-      const abiertasProcesadas = abiertas?.map(caja => {
-        const sumaPagos = caja.pagos?.reduce((acc: number, p: any) => acc + Number(p.monto), 0) || 0
+      // CORRECCIÓN: Casting a any para evitar error de propiedad pagos
+      const abiertasProcesadas = abiertas?.map((caja: any) => {
+        const sumaPagos = (caja.pagos as any[])?.reduce((acc: number, p: any) => acc + Number(p.monto), 0) || 0
         return { ...caja, acumulado: Number(caja.monto_apertura) + sumaPagos }
       }) || []
 
@@ -112,7 +113,10 @@ export default function GestionCajasPage() {
   }
 
   const handleCerrarCaja = async (caja: any) => {
-    if (!confirm(`¿Confirmas el cierre del turno de ${caja.nombre_responsable}?`)) return
+    // CORRECCIÓN: Uso seguro de confirm para SSR
+    if (typeof window !== 'undefined') {
+        if (!window.confirm(`¿Confirmas el cierre del turno de ${caja.nombre_responsable}?`)) return
+    }
 
     try {
       const { error } = await supabase.from('sesiones_caja')
@@ -141,14 +145,14 @@ export default function GestionCajasPage() {
   const hayCajaAbierta = cajasAbiertas.length > 0
 
   return (
-    <main className="min-h-screen bg-[#FDFDFD] p-8 md:p-12 font-sans text-slate-900">
+    <main className="min-h-screen bg-[#FDFDFD] p-8 md:p-12 font-sans text-slate-900 text-left">
       <div className="max-w-6xl mx-auto space-y-12">
         
         {/* HEADER */}
         <header className="flex flex-col md:flex-row justify-between items-start md:items-center gap-6">
-          <div className="space-y-1">
-            <h1 className="text-5xl font-black uppercase tracking-tighter text-slate-900 leading-none italic">Control <br/> <span className="text-blue-600">de Caja</span></h1>
-            <p className="text-[10px] font-bold text-slate-400 uppercase tracking-[0.3em] ml-1">Terminal de Arqueo y Recaudación</p>
+          <div className="space-y-1 text-left">
+            <h1 className="text-5xl font-black uppercase tracking-tighter text-slate-900 leading-none italic text-left">Control <br/> <span className="text-blue-600">de Caja</span></h1>
+            <p className="text-[10px] font-bold text-slate-400 uppercase tracking-[0.3em] ml-1 text-left">Terminal de Arqueo y Recaudación</p>
           </div>
           
           <button 
@@ -167,10 +171,10 @@ export default function GestionCajasPage() {
 
         {/* ALERTA */}
         <div className={`p-6 rounded-3xl flex items-center gap-5 border shadow-sm ${hayCajaAbierta ? 'bg-blue-50 border-blue-100 text-blue-800' : 'bg-amber-50 border-amber-100 text-amber-800'}`}>
-          <div className="bg-white p-3 rounded-2xl shadow-sm">
+          <div className="bg-white p-3 rounded-2xl shadow-sm shrink-0">
             {hayCajaAbierta ? <TrendingUp size={24} className="text-blue-500" /> : <Info size={24} className="text-amber-500" />}
           </div>
-          <p className="text-[11px] font-bold uppercase leading-relaxed tracking-wide">
+          <p className="text-[11px] font-bold uppercase leading-relaxed tracking-wide text-left">
             {hayCajaAbierta 
               ? `Sesión activa iniciada por ${cajasAbiertas[0].nombre_responsable}. Solo se permite una caja abierta a la vez.`
               : `Aviso: Los totales mostrados corresponden únicamente a ingresos directos registrados en sistema.`
@@ -179,8 +183,8 @@ export default function GestionCajasPage() {
         </div>
 
         {/* SESIÓN ACTIVA */}
-        <section className="space-y-6">
-          <h2 className="text-[10px] font-black uppercase text-slate-400 tracking-[0.4em] ml-6">Operación en Curso</h2>
+        <section className="space-y-6 text-left">
+          <h2 className="text-[10px] font-black uppercase text-slate-400 tracking-[0.4em] ml-6 text-left">Operación en Curso</h2>
           {cajasAbiertas.length === 0 ? (
             <div className="bg-white p-12 rounded-[3rem] border-2 border-dashed border-slate-100 text-center">
               <p className="text-slate-300 font-black uppercase text-xs italic tracking-widest">No hay turnos abiertos actualmente</p>
@@ -192,28 +196,27 @@ export default function GestionCajasPage() {
                   <div className="absolute top-0 right-0 p-10 opacity-10 rotate-12"><Banknote size={150} className="text-white"/></div>
                   
                   <div className="bg-white/5 backdrop-blur-md rounded-[3rem] p-10 flex flex-col md:flex-row justify-between items-center gap-8 relative z-10 border border-white/10">
-                    <div className="space-y-4">
+                    <div className="space-y-4 text-left w-full md:w-auto">
                       <div className="flex items-center gap-3 bg-blue-600/20 w-fit px-4 py-1.5 rounded-full border border-blue-500/20">
                          <div className="w-1.5 h-1.5 rounded-full bg-blue-400 animate-pulse" />
                          <span className="text-[9px] font-black uppercase text-blue-200 tracking-widest">Turno Activo</span>
                       </div>
-                      <h3 className="text-3xl font-black text-white uppercase italic tracking-tighter">{caja.nombre_responsable}</h3>
-                      <div className="flex items-center gap-4 text-slate-400 text-xs font-bold uppercase">
-                        <span className="flex items-center gap-1"><Calendar size={14}/> {new Date(caja.fecha_apertura).toLocaleDateString('es-CL')}</span>
-                        {/* CORRECCIÓN AQUÍ: USANDO CLOCK4 EN LUGAR DE CLOCK */}
-                        <span className="flex items-center gap-1"><Clock4 size={14}/> {new Date(caja.fecha_apertura).toLocaleTimeString('es-CL', {hour: '2-digit', minute:'2-digit'})} hrs</span>
+                      <h3 className="text-3xl font-black text-white uppercase italic tracking-tighter text-left">{caja.nombre_responsable}</h3>
+                      <div className="flex items-center gap-4 text-slate-400 text-xs font-bold uppercase text-left">
+                        <span className="flex items-center gap-1 text-left"><Calendar size={14}/> {new Date(caja.fecha_apertura).toLocaleDateString('es-CL')}</span>
+                        <span className="flex items-center gap-1 text-left"><Clock4 size={14}/> {new Date(caja.fecha_apertura).toLocaleTimeString('es-CL', {hour: '2-digit', minute:'2-digit'})} hrs</span>
                       </div>
                     </div>
 
                     <div className="flex gap-4 md:gap-8">
                       <div className="text-center md:text-right">
                         <p className="text-[9px] font-black text-slate-500 uppercase tracking-widest mb-1">Base Inicial</p>
-                        <p className="text-xl font-bold text-white">${caja.monto_apertura.toLocaleString('es-CL')}</p>
+                        <p className="text-xl font-bold text-white">${Number(caja.monto_apertura).toLocaleString('es-CL')}</p>
                       </div>
                       <div className="w-px h-12 bg-white/10 hidden md:block" />
                       <div className="text-center md:text-right">
                         <p className="text-[9px] font-black text-blue-400 uppercase tracking-widest mb-1 italic">Total Acumulado</p>
-                        <p className="text-4xl font-black text-blue-400 tracking-tighter">${caja.acumulado?.toLocaleString('es-CL')}</p>
+                        <p className="text-4xl font-black text-blue-400 tracking-tighter">${Number(caja.acumulado || 0).toLocaleString('es-CL')}</p>
                       </div>
                     </div>
 
@@ -231,13 +234,13 @@ export default function GestionCajasPage() {
         </section>
 
         {/* HISTORIAL */}
-        <section className="space-y-6 pt-6">
+        <section className="space-y-6 pt-6 text-left">
           <div className="flex items-center justify-between px-6">
-            <h2 className="text-[10px] font-black uppercase text-slate-400 tracking-[0.4em] flex items-center gap-2"><History size={16} /> Registro Histórico</h2>
+            <h2 className="text-[10px] font-black uppercase text-slate-400 tracking-[0.4em] flex items-center gap-2 text-left"><History size={16} /> Registro Histórico</h2>
             <span className="text-[9px] font-bold text-slate-300 uppercase tracking-widest italic">Mostrando últimos cierres</span>
           </div>
           
-          <div className="bg-white rounded-[3rem] shadow-xl border border-slate-100 overflow-hidden">
+          <div className="bg-white rounded-[3rem] shadow-xl border border-slate-100 overflow-hidden text-left">
             <div className="grid grid-cols-1 divide-y divide-slate-50">
               {cajasCerradas.map((caja) => (
                 <div 
@@ -245,13 +248,13 @@ export default function GestionCajasPage() {
                   onClick={() => router.push(`/cajas/${caja.id}`)}
                   className="p-8 flex flex-col md:flex-row items-center justify-between hover:bg-slate-50/80 transition-all cursor-pointer group"
                 >
-                  <div className="flex items-center gap-6">
+                  <div className="flex items-center gap-6 w-full md:w-auto">
                     <div className="bg-slate-100 p-5 rounded-2xl text-slate-400 group-hover:bg-blue-600 group-hover:text-white transition-all duration-500 shadow-inner">
                       <ReceiptText size={24} />
                     </div>
-                    <div className="space-y-1">
-                      <h4 className="font-black text-slate-800 text-lg uppercase tracking-tight">{caja.nombre_responsable}</h4>
-                      <p className="text-[10px] font-bold text-slate-400 uppercase tracking-widest">
+                    <div className="space-y-1 text-left">
+                      <h4 className="font-black text-slate-800 text-lg uppercase tracking-tight text-left">{caja.nombre_responsable}</h4>
+                      <p className="text-[10px] font-bold text-slate-400 uppercase tracking-widest text-left">
                         Cierre: {new Date(caja.fecha_cierre).toLocaleString('es-CL')}
                       </p>
                     </div>
@@ -278,7 +281,7 @@ export default function GestionCajasPage() {
         {modalApertura && (
           <div className="fixed inset-0 z-[10000] flex items-center justify-center p-4 bg-slate-900/80 backdrop-blur-md">
             <motion.div initial={{ scale: 0.9, opacity: 0, y: 20 }} animate={{ scale: 1, opacity: 1, y: 0 }} exit={{ scale: 0.9, opacity: 0, y: 20 }}
-              className="bg-white w-full max-w-lg rounded-[4rem] shadow-2xl overflow-hidden border border-slate-100"
+              className="bg-white w-full max-w-lg rounded-[4rem] shadow-2xl overflow-hidden border border-slate-100 text-center"
             >
               <div className="p-12 text-center space-y-6">
                 <div className="bg-blue-600 w-24 h-24 rounded-[2.5rem] flex items-center justify-center text-white mx-auto shadow-2xl shadow-blue-200">
@@ -294,7 +297,7 @@ export default function GestionCajasPage() {
                   <span className="font-black uppercase italic text-slate-800 tracking-tight">{responsable}</span>
                 </div>
 
-                <div className="space-y-4 pt-4">
+                <div className="space-y-4 pt-4 text-center">
                   <label className="text-[10px] font-black uppercase text-slate-400 tracking-[0.2em]">Monto en efectivo (Sencillo)</label>
                   <div className="relative group">
                     <span className="absolute left-8 top-1/2 -translate-y-1/2 text-3xl font-black text-emerald-500">$</span>
@@ -303,7 +306,7 @@ export default function GestionCajasPage() {
                       autoFocus
                       value={montoInicial} 
                       onChange={(e) => setMontoInicial(e.target.value)}
-                      className="w-full bg-slate-50 border-4 border-transparent focus:border-blue-500 focus:bg-white rounded-[2.5rem] py-10 pl-16 pr-8 text-6xl font-black outline-none transition-all text-center"
+                      className="w-full bg-slate-50 border-4 border-transparent focus:border-blue-500 focus:bg-white rounded-[2.5rem] py-10 pl-16 pr-8 text-6xl font-black outline-none transition-all text-center text-slate-900"
                     />
                   </div>
                 </div>
@@ -312,7 +315,7 @@ export default function GestionCajasPage() {
                   <button 
                     disabled={abriendoCaja}
                     onClick={handleAbrirCaja}
-                    className="w-full bg-slate-900 text-white py-8 rounded-[2.2rem] font-black text-sm uppercase shadow-2xl hover:bg-blue-600 transition-all flex items-center justify-center gap-3"
+                    className="w-full bg-slate-900 text-white py-8 rounded-[2.2rem] font-black text-sm uppercase shadow-2xl hover:bg-blue-600 transition-all flex items-center justify-center gap-3 disabled:bg-slate-300"
                   >
                     {abriendoCaja ? <Loader2 className="animate-spin" /> : 'Confirmar e Iniciar Operaciones'}
                   </button>
