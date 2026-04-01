@@ -12,7 +12,7 @@ import Link from 'next/link'
 import { toast } from 'sonner'
 import { useRole } from '@/app/hooks/useRole'
 
-// Configuración de arcadas (IDs de dientes)
+// Configuración de arcadas
 const c1 = [18, 17, 16, 15, 14, 13, 12, 11];
 const c2 = [21, 22, 23, 24, 25, 26, 27, 28];
 const c3 = [48, 47, 46, 45, 44, 43, 42, 41];
@@ -42,14 +42,15 @@ const ICONOS_DISPONIBLES = [
 ];
 
 export default function DetalleTratamientoPage() {
-  const { id: pacienteId, presupuestoId } = useParams()
+  const params = useParams()
+  const pacienteId = params.id
+  const presupuestoId = params.presupuestoId
   const { isAdmin, user } = useRole()
   
   const [items, setItems] = useState<any[]>([])
   const [dentadura, setDentadura] = useState<Record<number, any>>({})
   const [secciones, setSecciones] = useState<Record<string, any[]>>({})
   const [cargando, setCargando] = useState(true)
-  const [guardando, setGuardando] = useState(false)
   const [dienteSeleccionado, setDienteSeleccionado] = useState<number | null>(null)
   const [busqueda, setBusqueda] = useState('')
   const [categoriasAbiertas, setCategoriasAbiertas] = useState<Record<string, boolean>>({})
@@ -74,6 +75,7 @@ export default function DetalleTratamientoPage() {
     }
   }, [pacienteId, presupuestoId, user])
 
+  // Guardado automático del Odontograma con debounce
   useEffect(() => {
     if (!inicializado.current) {
       if (Object.keys(dentadura).length > 0) inicializado.current = true;
@@ -82,9 +84,9 @@ export default function DetalleTratamientoPage() {
     const guardarOdonto = async () => {
       await supabase.from('presupuestos').update({ odontograma_estado: dentadura }).eq('id', presupuestoId);
     };
-    const timer = setTimeout(guardarOdonto, 1000); 
+    const timer = setTimeout(guardarOdonto, 1500); 
     return () => clearTimeout(timer);
-  }, [dentadura]);
+  }, [dentadura, presupuestoId]);
 
   async function fetchProfesionales() {
     const { data } = await supabase.from('profesionales').select('user_id, nombre, apellido').eq('activo', true)
@@ -108,7 +110,7 @@ export default function DetalleTratamientoPage() {
   async function fetchTodo() {
     setCargando(true)
     try {
-      const { data: pres } = await supabase.from('presupuestos').select('*').eq('id', presupuestoId).single()
+      const { data: pres } = await supabase.from('presupuestos').select('*').eq('id', presupuestoId).maybeSingle()
       const { data: listaItems } = await supabase
         .from('presupuesto_items')
         .select(`*, prestaciones:prestacion_id(icono_tipo, "Nombre Accion"), profesionales:profesional_id(nombre, apellido)`)
@@ -164,7 +166,7 @@ export default function DetalleTratamientoPage() {
     if (!error && data) {
       setItems([...items, data]);
       setDienteSeleccionado(null);
-      toast.success("Agregado");
+      toast.success("Tratamiento agregado");
     }
   }
 
@@ -173,7 +175,10 @@ export default function DetalleTratamientoPage() {
     setGuardandoAbono(true)
     try {
       const { data: cajasOpen } = await supabase.from('sesiones_caja').select('id').eq('estado', 'abierta').order('fecha_apertura', { ascending: false }).limit(1);
-      if (!cajasOpen || cajasOpen.length === 0) return toast.error("No hay caja abierta");
+      if (!cajasOpen || cajasOpen.length === 0) {
+        setGuardandoAbono(false);
+        return toast.error("No hay caja abierta para procesar pagos");
+      }
       
       await supabase.from('pagos').insert([{
         paciente_id: pacienteId, presupuesto_id: presupuestoId, item_id: itemParaAbonar.id,
@@ -187,54 +192,61 @@ export default function DetalleTratamientoPage() {
       
       setItems(items.map(i => i.id === itemParaAbonar.id ? { ...i, abonado: nuevoAbonoItem, estado: nuevoEstado } : i));
       setItemParaAbonar(null);
-      toast.success("Abono registrado");
+      setMontoAbono('');
+      toast.success("Abono registrado con éxito");
     } catch (e: any) { toast.error(e.message) } finally { setGuardandoAbono(false) }
   }
 
   const eliminarItem = async (itemId: string) => {
-    if(!confirm("¿Eliminar?")) return;
-    const { error } = await supabase.from('presupuesto_items').delete().eq('id', itemId);
-    if (!error) setItems(items.filter(i => i.id !== itemId));
+    if (typeof window !== 'undefined' && window.confirm("¿Deseas eliminar esta prestación del plan?")) {
+      const { error } = await supabase.from('presupuesto_items').delete().eq('id', itemId);
+      if (!error) setItems(items.filter(i => i.id !== itemId));
+    }
   }
 
   const normalizarTexto = (texto: string) => String(texto || "").normalize("NFD").replace(/[\u0300-\u036f]/g, "").toUpperCase().trim();
 
-  if (cargando) return <div className="h-screen flex items-center justify-center bg-slate-50"><Loader2 className="animate-spin text-blue-600" size={40} /></div>
+  if (cargando) return (
+    <div className="h-screen flex flex-col items-center justify-center bg-slate-50 gap-4">
+      <Loader2 className="animate-spin text-blue-600" size={40} />
+      <p className="text-[10px] font-black uppercase tracking-widest text-slate-400">Sincronizando Expediente...</p>
+    </div>
+  )
 
   return (
-    <div className="min-h-screen bg-[#F8FAFC] flex relative font-sans text-slate-900 pb-20 selection:bg-blue-100 selection:text-blue-600">
+    <div className="min-h-screen bg-[#F8FAFC] flex relative font-sans text-slate-900 pb-20 text-left">
       
       <AnimatePresence>
         {prestacionSinIcono && (
-          <div className="fixed inset-0 bg-slate-900/40 backdrop-blur-xl z-[10002] flex items-center justify-center p-4 text-left">
-            <motion.div initial={{ scale: 0.95, opacity: 0 }} animate={{ scale: 1, opacity: 1 }} className="bg-white rounded-[3rem] p-10 max-w-lg w-full shadow-2xl">
-              <h3 className="text-xl font-black uppercase italic mb-6">Definir Icono Clínico</h3>
-              <div className="grid grid-cols-2 gap-3 max-h-[300px] overflow-y-auto pr-2 custom-scrollbar">
+          <div className="fixed inset-0 bg-slate-900/40 backdrop-blur-xl z-[10002] flex items-center justify-center p-4">
+            <motion.div initial={{ scale: 0.95, opacity: 0 }} animate={{ scale: 1, opacity: 1 }} className="bg-white rounded-[3rem] p-10 max-w-lg w-full shadow-2xl text-left">
+              <h3 className="text-xl font-black uppercase italic mb-6 text-left">Definir Icono Clínico</h3>
+              <div className="grid grid-cols-2 gap-3 max-h-[300px] overflow-y-auto pr-2 text-left">
                 {ICONOS_DISPONIBLES.map(ico => (
                   <button key={ico.id} onClick={() => guardarIconoPermanenteYAgregar(ico.id)} className="flex items-center gap-3 p-4 bg-slate-50 hover:bg-blue-600 hover:text-white rounded-2xl transition-all font-black text-[9px] uppercase text-left group">
                     {ico.label}
                   </button>
                 ))}
               </div>
-              <button onClick={() => setPrestacionSinIcono(null)} className="w-full mt-6 py-4 text-slate-400 font-black text-[10px] uppercase">Cancelar</button>
+              <button onClick={() => setPrestacionSinIcono(null)} className="w-full mt-6 py-4 text-slate-400 font-black text-[10px] uppercase text-center">Cancelar</button>
             </motion.div>
           </div>
         )}
 
         {itemParaAbonar && (
-          <div className="fixed inset-0 bg-slate-900/30 backdrop-blur-md z-[10001] flex items-center justify-center p-4 text-left">
-            <motion.div initial={{ scale: 0.9, opacity: 0 }} animate={{ scale: 1, opacity: 1 }} className="bg-white rounded-[3.5rem] p-12 max-w-md w-full shadow-2xl border border-slate-100">
-              <h3 className="text-2xl font-black uppercase italic mb-8 text-left">Cobrar Prestación</h3>
-              <div className="space-y-6">
-                <input type="number" value={montoAbono} onChange={(e) => setMontoAbono(e.target.value)} placeholder="$ 0" className="w-full p-6 bg-slate-50 rounded-[2rem] text-3xl font-black outline-none border-2 border-transparent focus:border-blue-500 shadow-inner" />
-                <div className="grid grid-cols-2 gap-2">
+          <div className="fixed inset-0 bg-slate-900/30 backdrop-blur-md z-[10001] flex items-center justify-center p-4">
+            <motion.div initial={{ scale: 0.9, opacity: 0 }} animate={{ scale: 1, opacity: 1 }} className="bg-white rounded-[3.5rem] p-12 max-md:p-8 max-w-md w-full shadow-2xl border border-slate-100 text-left">
+              <h3 className="text-2xl font-black uppercase italic mb-8 text-left text-slate-800">Cobrar Prestación</h3>
+              <div className="space-y-6 text-left">
+                <input type="number" value={montoAbono} onChange={(e) => setMontoAbono(e.target.value)} placeholder="$ 0" className="w-full p-6 bg-slate-50 rounded-[2rem] text-3xl font-black outline-none border-none shadow-inner text-slate-900" />
+                <div className="grid grid-cols-2 gap-2 text-left">
                   {METODOS_PAGO.map(m => (
-                    <button key={m.id} onClick={() => setMetodoSeleccionado(m.id)} className={`p-4 rounded-2xl border-2 font-black text-[9px] uppercase flex items-center gap-3 ${metodoSeleccionado === m.id ? 'border-emerald-500 bg-emerald-50 text-emerald-700 shadow-md' : 'bg-white border-slate-100 text-slate-400'}`}>
+                    <button key={m.id} onClick={() => setMetodoSeleccionado(m.id)} className={`p-4 rounded-2xl border-2 font-black text-[9px] uppercase flex items-center gap-3 transition-all ${metodoSeleccionado === m.id ? 'border-emerald-500 bg-emerald-50 text-emerald-700 shadow-md' : 'bg-white border-slate-100 text-slate-400'}`}>
                       {m.icon} {m.label}
                     </button>
                   ))}
                 </div>
-                <button onClick={guardarAbono} disabled={guardandoAbono} className="w-full bg-slate-900 text-white py-6 rounded-[2rem] font-black text-xs uppercase shadow-xl hover:bg-emerald-600 transition-all flex items-center justify-center gap-2">
+                <button onClick={guardarAbono} disabled={guardandoAbono || !montoAbono} className="w-full bg-slate-900 text-white py-6 rounded-[2rem] font-black text-xs uppercase shadow-xl hover:bg-emerald-600 transition-all flex items-center justify-center gap-2 disabled:bg-slate-300">
                   {guardandoAbono ? <Loader2 className="animate-spin" size={18}/> : <Save size={18}/>} Confirmar Pago
                 </button>
               </div>
@@ -243,28 +255,28 @@ export default function DetalleTratamientoPage() {
         )}
       </AnimatePresence>
 
-      <div className={`flex-1 p-10 transition-all duration-500 ${dienteSeleccionado ? 'ml-[450px] blur-sm scale-[0.98] pointer-events-none' : ''}`}>
+      <div className={`flex-1 p-10 max-md:p-4 transition-all duration-500 ${dienteSeleccionado ? 'ml-[450px] max-lg:ml-0 blur-sm scale-[0.98] pointer-events-none' : ''}`}>
         <div className="max-w-6xl mx-auto space-y-12 pt-4 text-left">
-          <Link href={`/pacientes/${pacienteId}`} className="group inline-flex items-center gap-3 font-black text-[10px] text-slate-400 uppercase hover:text-blue-600 transition-all">
+          <Link href={`/pacientes/${pacienteId}`} className="group inline-flex items-center gap-3 font-black text-[10px] text-slate-400 uppercase hover:text-blue-600 transition-all text-left">
             <div className="w-8 h-8 rounded-full bg-white border border-slate-200 flex items-center justify-center group-hover:bg-blue-50"><ChevronLeft size={16}/></div> 
             Volver a la ficha
           </Link>
 
-          <section className="bg-white p-12 rounded-[3rem] shadow-sm border border-slate-100 relative">
-            <div className="flex flex-col items-center gap-16 overflow-x-auto no-scrollbar py-4">
-                <div className="flex gap-8">
-                  <div className="flex gap-1 border-r-2 border-slate-100 pr-8">
+          <section className="bg-white p-12 max-md:p-6 rounded-[3rem] shadow-sm border border-slate-100 relative text-left">
+            <div className="flex flex-col items-center gap-16 overflow-x-auto no-scrollbar py-4 text-left">
+                <div className="flex gap-8 text-left">
+                  <div className="flex gap-1 border-r-2 border-slate-100 pr-8 text-left">
                     {c1.map(pid => <DienteVisual key={pid} id={pid} itemsDiente={items.filter(i => i.diente_id === pid)} onSelect={() => setDienteSeleccionado(pid)} />)}
                   </div>
-                  <div className="flex gap-1 pl-8">
+                  <div className="flex gap-1 pl-8 text-left">
                     {c2.map(pid => <DienteVisual key={pid} id={pid} itemsDiente={items.filter(i => i.diente_id === pid)} onSelect={() => setDienteSeleccionado(pid)} />)}
                   </div>
                 </div>
-                <div className="flex gap-8">
-                  <div className="flex gap-1 border-r-2 border-slate-100 pr-8">
+                <div className="flex gap-8 text-left">
+                  <div className="flex gap-1 border-r-2 border-slate-100 pr-8 text-left">
                     {c3.map(pid => <DienteVisual key={pid} id={pid} itemsDiente={items.filter(i => i.diente_id === pid)} onSelect={() => setDienteSeleccionado(pid)} invert />)}
                   </div>
-                  <div className="flex gap-1 pl-8">
+                  <div className="flex gap-1 pl-8 text-left">
                     {c4.map(pid => <DienteVisual key={pid} id={pid} itemsDiente={items.filter(i => i.diente_id === pid)} onSelect={() => setDienteSeleccionado(pid)} invert />)}
                   </div>
                 </div>
@@ -272,52 +284,58 @@ export default function DetalleTratamientoPage() {
           </section>
 
           <div className="bg-white rounded-[3rem] shadow-xl border border-slate-100 overflow-hidden text-left">
-             <div className="p-10 bg-slate-900 text-white flex justify-between items-center text-left">
+             <div className="p-10 bg-slate-900 text-white flex flex-col md:flex-row justify-between items-center gap-4 text-left">
                 <h4 className="text-2xl font-black uppercase italic tracking-tighter text-left">Plan de Tratamiento</h4>
-                <div className="text-right font-black">
+                <div className="text-right max-md:text-center font-black">
                     <p className="text-[10px] font-black text-slate-400 uppercase mb-1">Monto del Tratamiento</p>
-                    <span className="text-4xl font-black text-emerald-400 tracking-tighter italic">${items.reduce((a,b)=>a+Number(b.precio_pactado),0).toLocaleString('es-CL')}</span>
+                    <span className="text-4xl font-black text-emerald-400 tracking-tighter italic">${items.reduce((acc: number, curr: any) => acc + Number(curr.precio_pactado || 0), 0).toLocaleString('es-CL')}</span>
                 </div>
              </div>
-             <table className="w-full text-left border-separate border-spacing-0">
-               <tbody className="divide-y divide-slate-50">
-                 {items.map((item) => (
-                    <tr key={item.id} className="group hover:bg-blue-50/30 transition-all">
-                      <td className="px-10 py-8 text-left">
-                         <div className="flex items-center gap-6">
-                             <div className={`w-14 h-14 rounded-2xl flex items-center justify-center text-lg font-black shadow-sm transition-all ${item.estado === 'realizado' ? 'bg-blue-600 text-white shadow-blue-200' : 'bg-slate-100 text-slate-400'}`}>
-                                {item.diente_id || 'G'}
-                             </div>
-                             <div className="text-left">
-                                 <p className={`text-[14px] font-black uppercase italic leading-none mb-2 ${item.estado === 'realizado' ? 'text-blue-600' : 'text-slate-800'}`}>{item.prestaciones?.["Nombre Accion"]}</p>
-                                 <div className="flex items-center gap-2">
-                                    <span className="text-[9px] font-bold text-slate-400 uppercase italic">Dr. {item.profesionales?.nombre} {item.profesionales?.apellido}</span>
-                                    {item.estado === 'realizado' && <span className="bg-blue-50 text-blue-600 px-2 py-0.5 rounded-full text-[7px] font-black uppercase border border-blue-100">Hecho</span>}
-                                 </div>
-                             </div>
-                         </div>
-                      </td>
-                      <td className="px-6 py-8 text-right font-black">
-                        <p className="text-[9px] font-black text-slate-400 uppercase">Abono</p>
-                        <p className="text-sm font-black text-emerald-600">${Number(item.abonado || 0).toLocaleString('es-CL')}</p>
-                      </td>
-                      <td className="px-6 py-8 text-right font-black">
-                        <p className="text-[9px] font-black text-slate-400 uppercase font-black">Precio</p>
-                        <p className="text-lg font-black text-slate-900">${Number(item.precio_pactado).toLocaleString('es-CL')}</p>
-                      </td>
-                      <td className="px-10 py-8 text-right">
-                        <div className="flex items-center justify-end gap-2">
-                            <button onClick={() => marcarComoRealizado(item)} className={`w-12 h-12 flex items-center justify-center rounded-2xl transition-all shadow-sm border ${item.estado === 'realizado' ? 'bg-blue-600 border-blue-600 text-white' : 'bg-white border-slate-200 text-slate-300 hover:text-blue-600'}`}><CheckCircle2 size={20} /></button>
-                            <button onClick={() => { setItemParaAbonar(item); setMontoAbono(''); }} className="bg-emerald-50 text-emerald-600 px-6 py-3 rounded-2xl font-black text-[10px] uppercase hover:bg-emerald-600 hover:text-white transition-all">Pagar</button>
-                            {(isAdmin || user?.id === item.profesional_id) && (
-                              <button onClick={() => eliminarItem(item.id)} className="w-10 h-10 flex items-center justify-center bg-slate-50 text-slate-300 hover:bg-red-500 hover:text-white rounded-xl transition-all"><Trash2 size={16}/></button>
-                            )}
-                        </div>
-                      </td>
-                    </tr>
-                 ))}
-               </tbody>
-             </table>
+             <div className="overflow-x-auto text-left">
+              <table className="w-full text-left border-separate border-spacing-0">
+                <tbody className="divide-y divide-slate-50 text-left">
+                  {items.map((item) => {
+                    const prof = item.profesionales as any;
+                    const prest = item.prestaciones as any;
+                    return (
+                      <tr key={item.id} className="group hover:bg-blue-50/30 transition-all text-left">
+                        <td className="px-10 py-8 text-left">
+                           <div className="flex items-center gap-6 text-left">
+                               <div className={`w-14 h-14 rounded-2xl flex items-center justify-center text-lg font-black shadow-sm transition-all shrink-0 ${item.estado === 'realizado' ? 'bg-blue-600 text-white shadow-blue-200' : 'bg-slate-100 text-slate-400'}`}>
+                                 {item.diente_id || 'G'}
+                               </div>
+                               <div className="text-left">
+                                   <p className={`text-[14px] font-black uppercase italic leading-none mb-2 ${item.estado === 'realizado' ? 'text-blue-600' : 'text-slate-800'}`}>{prest?.["Nombre Accion"]}</p>
+                                   <div className="flex items-center gap-2 text-left">
+                                      <span className="text-[9px] font-bold text-slate-400 uppercase italic">Dr/a. {prof?.nombre} {prof?.apellido}</span>
+                                      {item.estado === 'realizado' && <span className="bg-blue-50 text-blue-600 px-2 py-0.5 rounded-full text-[7px] font-black uppercase border border-blue-100">Hecho</span>}
+                                   </div>
+                               </div>
+                           </div>
+                        </td>
+                        <td className="px-6 py-8 text-right font-black">
+                          <p className="text-[9px] font-black text-slate-400 uppercase">Abono</p>
+                          <p className="text-sm font-black text-emerald-600">${Number(item.abonado || 0).toLocaleString('es-CL')}</p>
+                        </td>
+                        <td className="px-6 py-8 text-right font-black">
+                          <p className="text-[9px] font-black text-slate-400 uppercase">Precio</p>
+                          <p className="text-lg font-black text-slate-900">${Number(item.precio_pactado || 0).toLocaleString('es-CL')}</p>
+                        </td>
+                        <td className="px-10 py-8 text-right">
+                          <div className="flex items-center justify-end gap-2 text-right">
+                              <button onClick={() => marcarComoRealizado(item)} className={`w-12 h-12 flex items-center justify-center rounded-2xl transition-all shadow-sm border ${item.estado === 'realizado' ? 'bg-blue-600 border-blue-600 text-white' : 'bg-white border-slate-200 text-slate-300 hover:text-blue-600'}`}><CheckCircle2 size={20} /></button>
+                              <button onClick={() => { setItemParaAbonar(item); setMontoAbono(''); }} className="bg-emerald-50 text-emerald-600 px-6 py-3 rounded-2xl font-black text-[10px] uppercase hover:bg-emerald-600 hover:text-white transition-all">Pagar</button>
+                              {(isAdmin || user?.id === item.profesional_id) && (
+                                <button onClick={() => eliminarItem(item.id)} className="w-10 h-10 flex items-center justify-center bg-slate-50 text-slate-300 hover:text-red-500 rounded-xl transition-all"><Trash2 size={16}/></button>
+                              )}
+                          </div>
+                        </td>
+                      </tr>
+                    );
+                  })}
+                </tbody>
+              </table>
+             </div>
           </div>
         </div>
       </div>
@@ -329,10 +347,10 @@ export default function DetalleTratamientoPage() {
             animate={{ x: 0, opacity: 1 }} 
             exit={{ x: -450, opacity: 0 }} 
             transition={{ type: 'spring', damping: 25, stiffness: 200 }}
-            className="fixed top-28 left-4 h-[calc(100vh-2rem)] w-[420px] bg-white shadow-2xl z-[9999] flex flex-col border border-white rounded-[3rem] overflow-hidden text-left"
+            className="fixed top-28 max-lg:top-0 left-4 max-lg:left-0 h-[calc(100vh-8rem)] max-lg:h-full w-[420px] max-lg:w-full bg-white shadow-2xl z-[9999] flex flex-col border border-white rounded-[3rem] max-lg:rounded-none overflow-hidden text-left"
           >
             <div className="pt-20 pb-8 px-10 bg-slate-900 text-white text-left relative">
-              <div className="flex justify-between items-center">
+              <div className="flex justify-between items-center text-left">
                 <div className="w-12 h-12 bg-blue-600 rounded-2xl flex items-center justify-center font-black text-xl italic">{dienteSeleccionado}</div>
                 <button 
                   onClick={() => setDienteSeleccionado(null)} 
@@ -347,14 +365,14 @@ export default function DetalleTratamientoPage() {
             <div className="p-8 space-y-6 text-left">
                 <div className="space-y-3 text-left">
                     <label className="text-[10px] font-black uppercase text-slate-400 tracking-widest ml-4 text-left">Médico Responsable</label>
-                    <select disabled={!isAdmin} className="w-full p-5 rounded-3xl font-black text-[11px] uppercase bg-slate-50 border-none outline-none shadow-inner text-slate-900" value={profesionalSeleccionado} onChange={(e) => setProfesionalSeleccionado(e.target.value)}>
+                    <select className="w-full p-5 rounded-3xl font-black text-[11px] uppercase bg-slate-50 border-none outline-none shadow-inner text-slate-900 appearance-none cursor-pointer" value={profesionalSeleccionado} onChange={(e) => setProfesionalSeleccionado(e.target.value)}>
                         <option value="">Seleccionar Especialista...</option>
                         {profesionales.map(p => <option key={p.user_id} value={p.user_id}>Dr. {p.nombre} {p.apellido}</option>)}
                     </select>
                 </div>
                 <div className="relative text-left">
                     <Search className="absolute left-6 top-1/2 -translate-y-1/2 text-slate-300" size={18}/>
-                    <input type="text" placeholder="Buscar prestación..." className="w-full p-5 pl-14 rounded-3xl font-bold text-xs bg-slate-50 outline-none focus:bg-white transition-all shadow-inner text-slate-900" value={busqueda} onChange={(e) => setBusqueda(e.target.value)} />
+                    <input type="text" placeholder="Buscar prestación..." className="w-full p-5 pl-14 rounded-3xl font-bold text-xs bg-slate-50 outline-none border-none text-slate-900 focus:bg-white transition-all shadow-inner" value={busqueda} onChange={(e) => setBusqueda(e.target.value)} />
                 </div>
             </div>
 
@@ -364,12 +382,12 @@ export default function DetalleTratamientoPage() {
                   if (busqueda && filtrados.length === 0) return null;
                   const isOpen = categoriasAbiertas[cat] || busqueda.length > 0;
                   return (
-                    <div key={cat} className="space-y-1">
+                    <div key={cat} className="space-y-1 text-left">
                       <button onClick={() => setCategoriasAbiertas(prev => ({...prev, [cat]: !prev[cat]}))} className={`w-full flex justify-between items-center p-4 rounded-2xl font-black text-[10px] uppercase transition-all ${isOpen ? 'bg-blue-50 text-blue-600' : 'hover:bg-slate-50 text-slate-500'}`}>
                         {cat} {isOpen ? <ChevronUp size={14}/> : <ChevronDown size={14}/>}
                       </button>
                       {isOpen && (
-                        <div className="space-y-1 pl-2">
+                        <div className="space-y-1 pl-2 text-left">
                           {filtrados.map(p => (
                             <button key={p.id} onClick={() => handleSeleccionarTratamiento(p)} className="w-full text-left p-4 hover:bg-white rounded-2xl transition-all group flex justify-between items-center">
                                <div className="max-w-[70%] text-left">
@@ -394,7 +412,7 @@ export default function DetalleTratamientoPage() {
 
 function DienteVisual({ id, onSelect, invert = false, itemsDiente = [] }: any) {
   const iconos = itemsDiente.map((i: any) => ({
-    tipo: i.prestaciones?.icono_tipo,
+    tipo: (i.prestaciones as any)?.icono_tipo,
     realizado: i.estado === 'realizado'
   }));
 
@@ -404,13 +422,11 @@ function DienteVisual({ id, onSelect, invert = false, itemsDiente = [] }: any) {
   };
 
   const isMolar = [18, 17, 16, 26, 27, 28, 36, 37, 38, 46, 47, 48].includes(id);
-  const isIncisivo = [12, 11, 21, 22, 31, 32, 41, 42].includes(id);
-  const isCanino = [13, 23, 33, 43].includes(id);
 
   const getDientePath = () => {
     if (isMolar) return "M20,20 L80,20 L85,80 Q85,100 50,100 Q15,100 15,80 Z";
-    if (isIncisivo) return "M35,20 L65,20 L68,85 Q68,100 50,100 Q32,100 32,85 Z";
-    if (isCanino) return "M35,30 L50,15 L65,30 L68,85 Q68,100 50,100 Q32,100 32,85 Z";
+    if ([12, 11, 21, 22, 31, 32, 41, 42].includes(id)) return "M35,20 L65,20 L68,85 Q68,100 50,100 Q32,100 32,85 Z";
+    if ([13, 23, 33, 43].includes(id)) return "M35,30 L50,15 L65,30 L68,85 Q68,100 50,100 Q32,100 32,85 Z";
     return "M30,20 L70,20 L75,80 Q75,100 50,100 Q25,100 25,80 Z";
   };
 
