@@ -1,6 +1,7 @@
 'use server'
 import { createClient } from '@supabase/supabase-js'
 
+// Cliente con Service Role para saltarse políticas de RLS y gestionar Auth
 const supabaseAdmin = createClient(
   process.env.NEXT_PUBLIC_SUPABASE_URL!,
   process.env.SUPABASE_SERVICE_ROLE_KEY!,
@@ -9,7 +10,8 @@ const supabaseAdmin = createClient(
 
 const VIRTUAL_DOMAIN = "@dentapro.com";
 
-export async function crearCuentaStaff(formData: any) {
+// RENOMBRADA: De crearCuentaStaff a crearCuentaProfesional
+export async function crearCuentaProfesional(formData: any) {
   const { nombre, apellido, username, password, rol, especialidad_id, rut } = formData;
   const nombreCompleto = `${nombre} ${apellido}`;
   
@@ -35,7 +37,7 @@ export async function crearCuentaStaff(formData: any) {
     if (authError) return { error: `Error Auth: ${authError.message}` };
     authUserId = authData.user.id;
 
-    // 2. Registro en tabla 'perfiles' (Incluyendo el RUT)
+    // 2. Registro en tabla 'perfiles'
     const { error: perfilError } = await supabaseAdmin
       .from('perfiles')
       .upsert([{ 
@@ -48,7 +50,7 @@ export async function crearCuentaStaff(formData: any) {
     
     if (perfilError) throw new Error(`Error Perfiles: ${perfilError.message}`);
 
-    // 3. Registro en tabla 'profesionales'
+    // 3. Registro en tabla 'profesionales' si es Dentista
     if (rol === 'DENTISTA') {
       const { error: dbError } = await supabaseAdmin
         .from('profesionales')
@@ -71,7 +73,8 @@ export async function crearCuentaStaff(formData: any) {
   }
 }
 
-export async function actualizarCuentaStaff(id: string, userId: string, formData: any) {
+// RENOMBRADA: De actualizarCuentaStaff a actualizarCuentaProfesional
+export async function actualizarCuentaProfesional(id: string, userId: string, formData: any) {
   try {
     const { nombre, apellido, especialidad_id, rol, rut } = formData;
     const nombreCompleto = `${nombre} ${apellido}`
@@ -112,12 +115,17 @@ export async function actualizarCuentaStaff(id: string, userId: string, formData
   }
 }
 
-export async function eliminarCuentaStaff(userId: string) {
+// RENOMBRADA: De eliminarCuentaStaff a eliminarCuentaProfesional
+export async function eliminarCuentaProfesional(userId: string) {
   try {
+    // Eliminar primero de las tablas de la base de datos por integridad referencial
     await supabaseAdmin.from('profesionales').delete().eq('user_id', userId);
     await supabaseAdmin.from('perfiles').delete().eq('id', userId);
+    
+    // Finalmente eliminar del sistema de autenticación
     const { error: authErr } = await supabaseAdmin.auth.admin.deleteUser(userId);
     if (authErr) throw authErr;
+
     return { success: true }
   } catch (err: any) {
     return { error: err.message }
