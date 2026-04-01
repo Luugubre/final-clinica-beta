@@ -4,13 +4,13 @@ import { useParams } from 'next/navigation'
 import { supabase } from '@/lib/supabase'
 import { Save, Loader2, Info } from 'lucide-react'
 import { motion } from 'framer-motion'
-import { toast } from 'sonner' // Opcional: para notificaciones más bonitas
+import { toast } from 'sonner'
 
 export default function DatosPersonalesPage() {
   const { id } = useParams()
   const [cargando, setCargando] = useState(true)
   const [guardando, setGuardando] = useState(false)
-  const [listaConvenios, setListaConvenios] = useState<string[]>([]) // Nuevo estado para convenios
+  const [listaConvenios, setListaConvenios] = useState<string[]>([])
   
   const [datos, setDatos] = useState<any>({
     tipo_paciente: '',
@@ -43,29 +43,27 @@ export default function DatosPersonalesPage() {
     }
   }, [id])
 
-  // Función unificada para cargar convenios y datos del paciente
   async function cargarTodo() {
     setCargando(true)
     try {
-      // 1. Cargamos los convenios desde la tabla 'convenios'
+      // 1. Carga de convenios
       const { data: convs, error: errConv } = await supabase
         .from('convenios')
         .select('nombre_convenio')
-        .eq('estado', 'Habilitado') // Solo los activos
+        .eq('estado', 'Habilitado')
         .order('nombre_convenio', { ascending: true })
 
       if (errConv) throw errConv
       
       const nombresConvenios = convs?.map(c => c.nombre_convenio) || []
-      // Añadimos "Sin convenio" al principio si no existe
       setListaConvenios(['Sin convenio', ...nombresConvenios.filter(n => n !== 'Sin convenio')])
 
-      // 2. Cargamos los datos del paciente
+      // 2. Carga de paciente con maybeSingle para evitar errores de Build
       const { data: paciente, error: errPac } = await supabase
         .from('pacientes')
         .select('*')
         .eq('id', id)
-        .single()
+        .maybeSingle()
 
       if (errPac) throw errPac
 
@@ -83,7 +81,7 @@ export default function DatosPersonalesPage() {
   }
 
   const handleGuardar = async () => {
-    if (!id) return alert("ID de paciente no encontrado");
+    if (!id) return toast.error("ID de paciente no encontrado");
     
     setGuardando(true)
     const payload = {
@@ -112,31 +110,35 @@ export default function DatosPersonalesPage() {
     }
 
     try {
-      const { data: updateData, error: updateError } = await supabase
+      const { error: updateError } = await supabase
         .from('pacientes')
         .update(payload)
         .eq('id', id)
-        .select()
 
       if (updateError) throw updateError
-      if (updateData) alert("✅ Datos actualizados correctamente")
+      toast.success("Datos actualizados correctamente")
 
     } catch (error: any) {
-      alert(`❌ Error: ${error.message}`)
+      toast.error(`Error: ${error.message}`)
     } finally {
       setGuardando(false)
     }
   }
 
-  if (cargando) return <div className="p-20 text-center"><Loader2 className="animate-spin mx-auto text-blue-600" size={32} /></div>
+  if (cargando) return (
+    <div className="p-20 text-center flex flex-col items-center gap-4">
+      <Loader2 className="animate-spin mx-auto text-blue-600" size={32} />
+      <p className="text-[10px] font-black uppercase tracking-widest text-slate-400">Cargando Ficha Maestra...</p>
+    </div>
+  )
 
   return (
-    <motion.div initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} className="space-y-8 pb-20">
-      {/* HEADER DE LA PÁGINA */}
-      <div className="flex justify-between items-center bg-white p-8 rounded-[2.5rem] shadow-sm border border-slate-100">
-        <div>
-          <h3 className="text-2xl font-black tracking-tight text-slate-800 uppercase italic leading-none">Información Personal</h3>
-          <p className="text-slate-400 text-[10px] font-bold uppercase tracking-widest mt-2">Edición de ficha maestra</p>
+    <motion.div initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} className="space-y-8 pb-20 text-left">
+      {/* HEADER */}
+      <div className="flex justify-between items-center bg-white p-8 rounded-[2.5rem] shadow-sm border border-slate-100 text-left">
+        <div className="text-left">
+          <h3 className="text-2xl font-black tracking-tight text-slate-800 uppercase italic leading-none text-left">Información Personal</h3>
+          <p className="text-slate-400 text-[10px] font-bold uppercase tracking-widest mt-2 text-left">Edición de ficha maestra</p>
         </div>
         <button 
           onClick={handleGuardar}
@@ -149,11 +151,11 @@ export default function DatosPersonalesPage() {
       </div>
 
       {/* SECCIÓN DATOS REQUERIDOS */}
-      <section className="bg-white p-10 rounded-[3rem] shadow-sm border border-slate-100">
-        <h4 className="text-blue-600 font-black text-[10px] uppercase tracking-[0.3em] mb-10 flex items-center gap-2">
+      <section className="bg-white p-10 rounded-[3rem] shadow-sm border border-slate-100 text-left">
+        <h4 className="text-blue-600 font-black text-[10px] uppercase tracking-[0.3em] mb-10 flex items-center gap-2 text-left">
           <Info size={14}/> Datos Requeridos
         </h4>
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-8">
+        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-8 text-left">
           <InputGroup label="Tipo de Paciente" type="select" value={datos.tipo_paciente} 
             onChange={(v:any) => setDatos({...datos, tipo_paciente: v})} 
             options={['discapacidad', 'embarazada', 'funcionario clinica', 'menor de edad', 'paciente adulto mayor']} />
@@ -165,17 +167,16 @@ export default function DatosPersonalesPage() {
       </section>
 
       {/* SECCIÓN CAMPOS OPCIONALES */}
-      <section className="bg-white p-10 rounded-[3rem] shadow-sm border border-slate-100">
-        <h4 className="text-slate-400 font-black text-[10px] uppercase tracking-[0.3em] mb-10">Campos Opcionales</h4>
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-8">
+      <section className="bg-white p-10 rounded-[3rem] shadow-sm border border-slate-100 text-left">
+        <h4 className="text-slate-400 font-black text-[10px] uppercase tracking-[0.3em] mb-10 text-left">Campos Opcionales</h4>
+        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-8 text-left">
           
-          {/* AQUÍ ESTÁ EL SELECTOR DINÁMICO DE CONVENIOS */}
           <InputGroup 
             label="Convenio (Previsión)" 
             type="select" 
             value={datos.prevision} 
             onChange={(v:any) => setDatos({...datos, prevision: v})} 
-            options={listaConvenios} // USAMOS LA LISTA CARGADA DE LA DB
+            options={listaConvenios} 
           />
 
           <InputGroup label="Nombre Social" value={datos.nombre_social} onChange={(v:any) => setDatos({...datos, nombre_social: v})} />
@@ -189,15 +190,15 @@ export default function DatosPersonalesPage() {
           <InputGroup label="Actividad" value={datos.actividad_profesion} onChange={(v:any) => setDatos({...datos, actividad_profesion: v})} />
         </div>
 
-        <div className="mt-10 grid grid-cols-1 md:grid-cols-2 gap-8 pt-10 border-t border-slate-100">
+        <div className="mt-10 grid grid-cols-1 md:grid-cols-2 gap-8 pt-10 border-t border-slate-100 text-left">
           <InputGroup label="Nombre Apoderado" value={datos.apoderado_nombre} onChange={(v:any) => setDatos({...datos, apoderado_nombre: v})} />
           <InputGroup label="RUT Apoderado" value={datos.apoderado_rut} onChange={(v:any) => setDatos({...datos, apoderado_rut: v})} />
         </div>
 
-        <div className="mt-10">
-          <label className="text-[10px] font-black text-slate-400 uppercase ml-4 block mb-2 tracking-widest">Observaciones</label>
+        <div className="mt-10 text-left">
+          <label className="text-[10px] font-black text-slate-400 uppercase ml-4 block mb-2 tracking-widest text-left">Observaciones</label>
           <textarea 
-            className="w-full p-6 bg-slate-50 rounded-[2.5rem] font-medium border-none outline-none focus:ring-2 ring-blue-500/10 transition-all shadow-inner leading-relaxed" 
+            className="w-full p-6 bg-slate-50 rounded-[2.5rem] font-medium border-none outline-none focus:ring-2 ring-blue-500/10 transition-all shadow-inner leading-relaxed text-slate-900" 
             rows={4}
             value={datos.observaciones_personales || ''} 
             onChange={(e) => setDatos({...datos, observaciones_personales: e.target.value})} 
@@ -210,23 +211,23 @@ export default function DatosPersonalesPage() {
 
 function InputGroup({ label, value, onChange, type = "text", options = [] }: any) {
   return (
-    <div className="space-y-2">
-      <label className="text-[10px] font-black text-slate-400 uppercase ml-4 tracking-[0.1em]">{label}</label>
+    <div className="space-y-2 text-left">
+      <label className="text-[10px] font-black text-slate-400 uppercase ml-4 tracking-[0.1em] text-left">{label}</label>
       {type === "select" ? (
-        <div className="relative">
+        <div className="relative text-left">
           <select 
-            className="w-full p-5 bg-slate-50 rounded-2xl font-bold border-none outline-none focus:ring-2 ring-blue-500/20 appearance-none transition-all cursor-pointer"
+            className="w-full p-5 bg-slate-50 rounded-2xl font-bold border-none outline-none focus:ring-2 ring-blue-500/20 appearance-none transition-all cursor-pointer text-slate-900"
             value={value || ''} onChange={(e) => onChange(e.target.value)}
           >
             <option value="">Seleccione...</option>
             {options.map((opt: string) => <option key={opt} value={opt}>{opt}</option>)}
           </select>
-          <div className="absolute right-5 top-1/2 -translate-y-1/2 pointer-events-none opacity-30 text-[8px]">▼</div>
+          <div className="absolute right-5 top-1/2 -translate-y-1/2 pointer-events-none opacity-30 text-[8px] text-slate-900">▼</div>
         </div>
       ) : (
         <input 
           type={type}
-          className={`w-full p-5 bg-slate-50 rounded-2xl font-bold border-none outline-none focus:ring-2 ring-blue-500/20 transition-all shadow-inner`}
+          className="w-full p-5 bg-slate-50 rounded-2xl font-bold border-none outline-none focus:ring-2 ring-blue-500/20 transition-all shadow-inner text-slate-900"
           value={value || ''} 
           onChange={(e) => onChange(e.target.value)}
         />
